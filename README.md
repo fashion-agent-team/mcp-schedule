@@ -9,6 +9,7 @@
 - `add_schedule(date, title, kind)`: 일정 기록 (면접, 결혼식, 장례식, 회의, 운동 등)
 - `get_today()`: 오늘 일정
 - `suggest_by_schedule(kind)`: 일정에 맞는 격식(formal / smart / casual / sporty)
+- `suggest_by_place(place)`: 일정 장소를 지도 API로 찾아 장소 종류(호텔 레스토랑, 등산로, 사무실 등)에 맞는 옷차림 추천 ("등산로 입구라 운동화 챙기세요")
 
 ## 지금 상태
 
@@ -21,6 +22,8 @@
 - [ ] MCP 서버 만들기
 - [ ] 일정을 DB에 저장
 - [ ] 일정 알림 방식 정하기
+- [ ] 장소 분위기: 일정 장소로 옷차림 추천
+- [ ] 지도 API 고르기 (카카오 로컬, 네이버 지역 검색 등)
 
 ## 전체 구조
 
