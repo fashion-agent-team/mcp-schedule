@@ -4,3 +4,8 @@ node_modules/
 .DS_Store
 .idea/
 .vscode/
+# Gradle / Java
+.gradle/
+build/
+out/
+*.iml
