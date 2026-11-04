@@ -1,37 +1,57 @@
 # mcp-schedule
 
-**schedule MCP 서버** · 패션 에이전트(시각장애인용 코디 도우미)의 한 부분입니다.
+**schedule MCP 서버 · 일정과 장소 종류** · 패션 에이전트(시각장애인용 음성 AI 옷 추천)의 한 부분입니다.
 
-사용자에게 일정을 묻고 기록·알림하며, 일정에 맞는 옷차림을 추천합니다.
+담당: 정지원 (임시 배정, 바꿔도 됨)
 
-## 도구 (안)
+## 한눈에
 
-- `add_schedule(date, title, kind)`: 일정 기록 (면접, 결혼식, 장례식, 회의, 운동 등)
-- `get_today()`: 오늘 일정
-- `suggest_by_schedule(kind)`: 일정에 맞는 격식(formal / smart / casual / sporty)
-- `suggest_by_place(place)`: 일정 장소를 지도 API로 찾아 장소 종류(호텔 레스토랑, 등산로, 사무실 등)에 맞는 옷차림 추천 ("등산로 입구라 운동화 챙기세요")
+- 포트: 8092, 엔드포인트: `http://mcp-schedule:8092/mcp` (Streamable HTTP)
+- 기술: Spring Boot, Spring AI MCP Server, 카카오 로컬 API(장소 종류), FCM(당일 알림), `@Scheduled`, Spring Data JPA, PostgreSQL
+- 상태 확인: `GET /actuator/health`
 
-## 지금 상태
+## MCP 도구
 
-앱 안에 저장소와 규칙만 있고, 말로 등록하는 기능은 없습니다. 여기로 옮길 코드:
-- `fashion-agent`의 `lib/services/schedule_store.dart`, `lib/models/schedule_event.dart`
-- `lib/styling/schedule_rules.dart`
+| 도구 | 하는 일 |
+| --- | --- |
+| `schedule_list` | 날짜별 일정 + 장소 종류(placeCategory) + 자리 종류(occasion). 옷 추천 1단계에서 오늘 날짜로 불림 |
+| `schedule_add` | 일정 추가. 장소 이름을 카카오 로컬로 찾아 occasion 결정 |
+| `schedule_delete` | 일정 삭제 |
+
+입출력 JSON은 [MCP 도구 입출력](https://github.com/fashion-agent-team/fashion-agent/blob/develop/docs/contracts/mcp-tools.md)를 그대로 따릅니다.
+
+## 이 레포가 지킬 것
+
+- **데이터만 돌려줍니다.** 이 자리에 어떤 옷이 맞는지는 Gemini가 판단합니다.
+- `occasion`: `mourning`(장례·조문) `wedding`(결혼식) `formal`(면접·발표·상견례) `business`(회의·출근·수업) `active`(운동·등산) `casual`(그 밖). 앱 레포 `lib/styling/schedule_rules.dart`의 키워드 표를 옮깁니다.
+- 일정 당일 아침 8시 FCM 알림(도구가 아니라 스케줄러).
+- 앱이 직접 보는 `GET /api/v1/schedules?date=`도 엽니다(게이트웨이 경유).
+- DB 스키마 `schedule`만 씁니다(`events`).
 
 ## 할 일
 
-- [ ] MCP 서버 만들기
-- [ ] 일정을 DB에 저장
-- [ ] 일정 알림 방식 정하기
-- [ ] 장소 분위기: 일정 장소로 옷차림 추천
-- [ ] 지도 API 고르기 (카카오 로컬, 네이버 지역 검색 등)
+- [ ] 뼈대 + `/mcp` + Dockerfile
+- [ ] `events` 테이블, `schedule_add`·`schedule_list`·`schedule_delete`
+- [ ] 제목 키워드로 occasion 정하기 → 카카오 로컬로 장소 종류 보강
+- [ ] 당일 알림 (FCM)
 
-## 전체 구조
+## 공통 약속
 
-```
-application(fashion-agent) ─REST→ fashion-agent-gateway ─→ fashion-agent-agent ─MCP→ mcp-weather / mcp-schedule / mcp-clothes-state / mcp-face-check / mcp-closet
-                                                                                              ↓
-                                                                                              DB (계정·회원정보·일정·옷장)
-```
+모든 레포가 지키는 약속은 앱 레포에 있습니다. **코드보다 약속 문서를 먼저 고칩니다.**
+
+- [서비스 간 약속](https://github.com/fashion-agent-team/fashion-agent/blob/develop/docs/contracts/README.md): 공통 규칙, 포트, 인증(`X-User-Id`), 오류 모양, DB 스키마, 옷 추천 흐름
+- [MCP 도구 입출력](https://github.com/fashion-agent-team/fashion-agent/blob/develop/docs/contracts/mcp-tools.md)
+- [앱 ↔ 게이트웨이 API (OpenAPI)](https://github.com/fashion-agent-team/fashion-agent/blob/develop/docs/contracts/openapi.yaml)
+- [아키텍처와 기술 스택](https://github.com/fashion-agent-team/fashion-agent/blob/develop/docs/ARCHITECTURE.md)
+
+## 버전
+
+| 항목 | 버전 |
+| --- | --- |
+| Java | 21 |
+| Spring Boot | 4.0.9 |
+| Spring Cloud | 2025.1.4 |
+| Spring AI (BOM) | 2.0.2 |
 
 ## 브랜치
 
@@ -39,4 +59,4 @@ GitFlow를 따릅니다. `develop`에서 `feature/…` 브랜치를 따서 PR로
 
 ## 비밀 값
 
-API 키와 DB 접속 정보는 레포에 넣지 않습니다. 배포 환경의 비밀 값(Secret)으로만 둡니다.
+API 키와 DB 비밀번호는 레포에 넣지 않습니다. 로컬은 `.env`(커밋 금지), 배포는 서버 환경 변수로 둡니다. 목록은 앱 레포 `docs/infra/.env.example`에 있습니다.
