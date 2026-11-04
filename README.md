@@ -1,8 +1,8 @@
 # mcp-schedule
 
-**schedule MCP 서버** · 패션 에이전트(시각장애인용 코디 도우미)의 한 부분입니다.
+**schedule MCP 서버 · 일정과 장소 종류** · 패션 에이전트(시각장애인용 음성 AI 옷 추천)의 한 부분입니다.
 
-사용자에게 일정을 묻고 기록·알림하며, 일정에 맞는 옷차림을 추천합니다.
+담당: 정지원 (임시 배정, 바꿔도 됨)
 
 ## 한눈에
 
@@ -72,13 +72,23 @@ npx @modelcontextprotocol/inspector   # Transport: Streamable HTTP, URL: http://
 - [ ] 당일 알림 붙이기 (제안: gateway 내부 API `POST /internal/push {userId, title, body}`, 팀 미확정)
 - [ ] 실제 카카오 키로 장소 분류 표 다듬기 (비교 스크립트: 프로젝트 파일 `mcp-schedule-compare/compare_places.py`)
 
-## 전체 구조
+## 공통 약속
 
-```
-application(fashion-agent) ─REST→ fashion-agent-gateway ─→ fashion-agent-agent ─MCP→ mcp-weather / mcp-schedule / mcp-clothes-state / mcp-face-check / mcp-closet
-                                                                                              ↓
-                                                                                              DB (계정·회원정보·일정·옷장)
-```
+모든 레포가 지키는 약속은 앱 레포에 있습니다. **코드보다 약속 문서를 먼저 고칩니다.**
+
+- [서비스 간 약속](https://github.com/fashion-agent-team/fashion-agent/blob/develop/docs/contracts/README.md): 공통 규칙, 포트, 인증(`X-User-Id`), 오류 모양, DB 스키마, 옷 추천 흐름
+- [MCP 도구 입출력](https://github.com/fashion-agent-team/fashion-agent/blob/develop/docs/contracts/mcp-tools.md)
+- [앱 ↔ 게이트웨이 API (OpenAPI)](https://github.com/fashion-agent-team/fashion-agent/blob/develop/docs/contracts/openapi.yaml)
+- [아키텍처와 기술 스택](https://github.com/fashion-agent-team/fashion-agent/blob/develop/docs/ARCHITECTURE.md)
+
+## 버전
+
+| 항목 | 버전 |
+| --- | --- |
+| Java | 21 |
+| Spring Boot | 4.0.9 |
+| Spring Cloud | 2025.1.4 |
+| Spring AI (BOM) | 2.0.2 |
 
 ## 브랜치
 
