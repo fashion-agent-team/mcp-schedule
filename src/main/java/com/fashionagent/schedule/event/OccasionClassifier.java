@@ -33,11 +33,13 @@ public class OccasionClassifier {
 
         // 카카오 로컬 category_name 예: "서비스,산업 > 장례식장", "가정,생활 > 예식장",
         // "여행 > 관광,명소 > 산", "스포츠,레저 > 테니스장"
-        PLACE_KEYWORDS.put(Occasion.mourning, List.of("장례식장", "납골당", "추모공원", "공원묘지"));
+        // 2026-11-10 실제 카카오 검색 30곳으로 확인: 서울추모공원은 "가정,생활 > 장례 > 화장터",
+        // 북한산은 "여행 > 관광,명소 > 국립공원"으로 나와서 화장터·국립공원을 더했습니다.
+        PLACE_KEYWORDS.put(Occasion.mourning, List.of("장례식장", "납골당", "화장터", "추모공원", "공원묘지"));
         PLACE_KEYWORDS.put(Occasion.wedding, List.of("예식장", "웨딩홀", "웨딩컨벤션"));
         PLACE_KEYWORDS.put(Occasion.business, List.of("회사", "사무실", "오피스", "공공기관", "관공서",
                 "학교", "대학교", "학원"));
-        PLACE_KEYWORDS.put(Occasion.active, List.of("스포츠,레저", "산", "등산로", "체육관", "헬스",
+        PLACE_KEYWORDS.put(Occasion.active, List.of("스포츠,레저", "산", "국립공원", "등산로", "체육관", "헬스",
                 "피트니스", "운동장", "수영장", "골프"));
     }
 
