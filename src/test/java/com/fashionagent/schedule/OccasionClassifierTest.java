@@ -43,4 +43,21 @@ class OccasionClassifierTest {
     void 짧은_낱말은_마디가_같을_때만() {
         assertThat(classifier.fromPlaceCategory("서비스,산업 > 부동산")).isEmpty();
     }
+
+    /** 2026-11-10 실제 카카오 검색 결과에서 가져온 분류들 */
+    @Test
+    void 실제_카카오_분류() {
+        assertThat(classifier.fromPlaceCategory("가정,생활 > 결혼 > 예식장")).contains(Occasion.wedding);
+        assertThat(classifier.fromPlaceCategory("가정,생활 > 장례 > 장례식장")).contains(Occasion.mourning);
+        assertThat(classifier.fromPlaceCategory("가정,생활 > 장례 > 화장터")).contains(Occasion.mourning);
+        assertThat(classifier.fromPlaceCategory("가정,생활 > 장례 > 납골당")).contains(Occasion.mourning);
+        assertThat(classifier.fromPlaceCategory("여행 > 관광,명소 > 국립공원")).contains(Occasion.active);
+        assertThat(classifier.fromPlaceCategory("여행 > 관광,명소 > 산")).contains(Occasion.active);
+        assertThat(classifier.fromPlaceCategory("스포츠,레저 > 스포츠시설 > 헬스클럽 > 스포애니")).contains(Occasion.active);
+        assertThat(classifier.fromPlaceCategory("교육,학문 > 학교 > 대학교")).contains(Occasion.business);
+        assertThat(classifier.fromPlaceCategory("사회,공공기관 > 지방행정기관 > 구청")).contains(Occasion.business);
+        assertThat(classifier.fromPlaceCategory("서비스,산업 > 전문대행 > 공간대여 > 공유오피스")).contains(Occasion.business);
+        assertThat(classifier.fromPlaceCategory("여행 > 숙박 > 호텔 > 롯데호텔")).isEmpty();
+        assertThat(classifier.fromPlaceCategory("음식점 > 카페 > 커피전문점 > 스타벅스")).isEmpty();
+    }
 }
