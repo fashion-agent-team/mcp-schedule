@@ -194,7 +194,9 @@ agent는 이 값을 보고 그날 어떤 옷이 맞는지 정합니다. 이 서�
 - 문장 예: "오늘 오후 2시에 더채플앳청담에서 친구 결혼식 일정이 있어요. 옷 추천을 받아 보세요."
 - 보내면 `notified_at`을 채워서 다시 보내지 않습니다.
 - **지금은 로그만 남깁니다**(`LoggingNotifier`, 사용자 id와 일정 id만 기록). 실제 푸시는 아직 없습니다.
-- **FCM 토큰 저장 위치가 아직 정해지지 않았습니다.** 토큰은 gateway 쪽 `account` 스키마에 둘 계획이라 이 서비스가 직접 읽을 수 없습니다. 토큰을 받는 방법이 정해지면 `Notifier` 구현(예: `FcmNotifier`)을 하나 만들어 바꿔 끼우면 됩니다.
+- 푸시를 보내려면 사용자 폰의 주소(FCM 토큰)가 필요한데, 이 주소는 개인정보라 **gateway만 갖고 있고 일정 서버는 보지 않습니다.**
+- 그래서 일정 서버는 "이 사용자에게 이 문장을 보내 주세요"만 gateway에 부탁하고, **실제 발송은 gateway가 합니다.** (안: `POST /internal/push {userId, title, body}`)
+- gateway 쪽 기능이 생기면 `Notifier` 구현(예: `GatewayPushNotifier`)을 하나 만들어 `LoggingNotifier` 대신 끼우면 됩니다.
 
 ## REST API
 
@@ -316,7 +318,7 @@ src/main/resources/
 - [x] `events` 테이블(Flyway), `schedule_add`·`schedule_list`·`schedule_delete`
 - [x] 제목 키워드로 자리 종류 정하기 → 카카오 로컬로 장소 종류 보강
 - [x] PR 자동 테스트(GitHub Actions)
-- [ ] 아침 알림 실제 푸시 붙이기 (FCM 토큰을 어디에 두고 어떻게 받을지 팀 결정 필요)
+- [ ] 아침 알림 실제 푸시 붙이기 (gateway에 발송 API가 생기면 그걸 부르도록)
 - [ ] 실제 카카오 키로 장소 분류 키워드 표 다듬기 (비교 스크립트: 프로젝트 파일 `mcp-schedule-compare/compare_places.py`)
 
 ## 공통 약속
