@@ -57,6 +57,10 @@ public class Event {
     @Column(name = "notified_at")
     private Instant notifiedAt;
 
+    /** 격식 일정 드라이클리닝 안내를 마친 시각(등록 때 말했거나 며칠 전 알림을 보냄). 아직이면 null. */
+    @Column(name = "care_reminded_at")
+    private Instant careRemindedAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -94,6 +98,10 @@ public class Event {
         this.notifiedAt = at;
     }
 
+    public void markCareReminded(Instant at) {
+        this.careRemindedAt = at;
+    }
+
     public String getId() { return id; }
     public UUID getUserId() { return userId; }
     public String getTitle() { return title; }
@@ -104,4 +112,5 @@ public class Event {
     public OccasionSource getOccasionSource() { return occasionSource; }
     public Occasion getOccasion() { return occasion; }
     public Instant getNotifiedAt() { return notifiedAt; }
+    public Instant getCareRemindedAt() { return careRemindedAt; }
 }

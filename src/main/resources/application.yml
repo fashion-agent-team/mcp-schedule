@@ -44,6 +44,9 @@ schedule:
     rest-api-key: ${KAKAO_REST_API_KEY:}
   reminder:
     cron: "0 0 8 * * *"
+  # 격식 일정 3일 전 드라이클리닝 알림
+  care-reminder:
+    cron: "0 0 8 * * *"
 
 management:
   endpoints:

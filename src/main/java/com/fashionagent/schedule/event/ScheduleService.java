@@ -1,6 +1,7 @@
 package com.fashionagent.schedule.event;
 
 import java.security.SecureRandom;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -31,16 +32,22 @@ public class ScheduleService {
     private final PlaceLookup placeLookup;
     private final OccasionClassifier classifier;
     private final ZoneId zone;
+    private final Clock clock;
 
     public ScheduleService(EventRepository repository, PlaceLookup placeLookup,
-            OccasionClassifier classifier, @Value("${schedule.zone:Asia/Seoul}") String zone) {
+            OccasionClassifier classifier, @Value("${schedule.zone:Asia/Seoul}") String zone, Clock clock) {
         this.repository = repository;
         this.placeLookup = placeLookup;
         this.classifier = classifier;
         this.zone = ZoneId.of(zone);
+        this.clock = clock;
     }
 
-    public record AddResult(String eventId, Occasion occasion, String placeCategory, String spokenSummary) {
+    /**
+     * @param careTip 격식 일정이면 드라이클리닝 안내 문장, 아니면 null. spokenSummary 뒤에도 붙어 있습니다.
+     */
+    public record AddResult(String eventId, Occasion occasion, String placeCategory, String spokenSummary,
+            String careTip) {
     }
 
     @Transactional
@@ -59,9 +66,21 @@ public class ScheduleService {
 
         Event event = new Event(newId(), user, cleanTitle, startAt.toInstant(), cleanPlace,
                 info == null ? null : info.id(), placeCategory, occasion.occasion(), occasion.source());
+
+        // 격식 자리면 드라이클리닝 안내. 이미 3일 안쪽이면 지금 말한 것으로 끝내고 3일 전 알림은 보내지 않습니다.
+        LocalDate today = today();
+        String careTip = DryCleaningAdvice.atRegistration(occasion.occasion(), today, startAt).orElse(null);
+        if (DryCleaningAdvice.applies(occasion.occasion())
+                && DryCleaningAdvice.daysUntil(today, startAt) <= DryCleaningAdvice.REMIND_DAYS_BEFORE) {
+            event.markCareReminded(Instant.now(clock));
+        }
         repository.save(event);
 
-        return new AddResult(event.getId(), occasion.occasion(), placeCategory, summary(startAt, cleanPlace, cleanTitle));
+        String spoken = summary(startAt, cleanPlace, cleanTitle);
+        if (careTip != null) {
+            spoken = spoken + " " + careTip;
+        }
+        return new AddResult(event.getId(), occasion.occasion(), placeCategory, spoken, careTip);
     }
 
     @Transactional(readOnly = true)
@@ -77,6 +96,57 @@ public class ScheduleService {
                 .toList();
     }
 
+    /**
+     * 앱을 열었을 때 인사 뒤에 읽어 줄 일정 안내.
+     *
+     * @param spoken 그대로 읽어 줄 문장
+     * @param today 오늘 일정(시작 순)
+     * @param upcoming 내일부터 3일 뒤까지의 격식 일정(면접·결혼식·장례식 등, 시작 순)
+     */
+    public record Briefing(String spoken, List<EventView> today, List<EventView> upcoming) {
+    }
+
+    /**
+     * 오늘 일정과 3일 안에 있는 중요한(격식) 일정을 한 번에 읽어 줄 문장으로 만듭니다. 읽기만 하고 알림 기록은 바꾸지 않습니다.
+     * <p>예: "오늘은 오후 7시에 친구랑 저녁 일정이 있어요. 모레 11월 13일 금요일 오후 2시에 면접 일정이 있어요. 입을 옷은 세탁소에 맡기셨어요? …"
+     */
+    @Transactional(readOnly = true)
+    public Briefing briefing(String userId) {
+        UUID user = parseUserId(userId);
+        LocalDate day = today();
+        List<Event> todays = repository.findByUserIdAndStartAtGreaterThanEqualAndStartAtLessThanOrderByStartAtAsc(
+                user, day.atStartOfDay(zone).toInstant(), day.plusDays(1).atStartOfDay(zone).toInstant());
+        List<Event> soon = repository.findByUserIdAndStartAtGreaterThanEqualAndStartAtLessThanOrderByStartAtAsc(
+                user, day.plusDays(1).atStartOfDay(zone).toInstant(),
+                day.plusDays(DryCleaningAdvice.REMIND_DAYS_BEFORE + 1L).atStartOfDay(zone).toInstant())
+                .stream().filter(e -> DryCleaningAdvice.applies(e.getOccasion())).toList();
+
+        StringBuilder spoken = new StringBuilder();
+        if (todays.isEmpty()) {
+            spoken.append("오늘은 일정이 없어요.");
+        } else if (todays.size() == 1) {
+            spoken.append("오늘은 ").append(oneLine(todays.getFirst())).append(" 일정이 있어요.");
+        } else {
+            spoken.append("오늘 일정은 ").append(todays.size()).append("개예요. ");
+            spoken.append(String.join(", ", todays.stream().map(this::oneLine).toList())).append(".");
+        }
+        for (Event e : soon) {
+            spoken.append(" ").append(DryCleaningAdvice.upcoming(e.getTitle(), day, e.getStartAt().atZone(zone)));
+        }
+        if (!soon.isEmpty()) {
+            spoken.append(" ").append(DryCleaningAdvice.ASK);
+        }
+        return new Briefing(spoken.toString(),
+                todays.stream().map(e -> EventView.of(e, zone)).toList(),
+                soon.stream().map(e -> EventView.of(e, zone)).toList());
+    }
+
+    /** "오후 2시에 더채플앳청담에서 친구 결혼식" */
+    private String oneLine(Event e) {
+        String where = e.getPlace() == null ? "" : e.getPlace() + "에서 ";
+        return KoreanText.spokenTime(e.getStartAt().atZone(zone)) + "에 " + where + e.getTitle();
+    }
+
     @Transactional
     public boolean delete(String userId, String eventId) {
         UUID user = parseUserId(userId);
@@ -90,7 +160,7 @@ public class ScheduleService {
     }
 
     public LocalDate today() {
-        return LocalDate.now(zone);
+        return LocalDate.now(clock.withZone(zone));
     }
 
     public ZoneId zone() {

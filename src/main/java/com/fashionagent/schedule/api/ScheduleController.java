@@ -39,6 +39,12 @@ public class ScheduleController {
         return new ListResponse(service.list(userId, date));
     }
 
+    /** 앱을 열었을 때 인사 뒤에 읽어 줄 오늘 일정과 3일 안 중요한 일정. spoken을 그대로 읽으면 됩니다. */
+    @GetMapping("/briefing")
+    public ScheduleService.Briefing briefing(@RequestHeader("X-User-Id") String userId) {
+        return service.briefing(userId);
+    }
+
     @ExceptionHandler(ScheduleException.class)
     ResponseEntity<ApiError> handle(ScheduleException e) {
         return ResponseEntity.status(e.status()).body(e.toApiError());

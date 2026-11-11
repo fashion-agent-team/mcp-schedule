@@ -6,6 +6,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -44,6 +45,13 @@ class McpToolsIntegrationTest {
                     ? Optional.of(PlaceInfo.of("12345678", "더채플앳청담", "가정,생활 > 예식장"))
                     : Optional.empty();
         }
+
+        /** 오늘을 2026-11-01(한국 시각)로 고정합니다. */
+        @Bean
+        @Primary
+        MutableClock testClock() {
+            return new MutableClock(Instant.parse("2026-11-01T09:00:00+09:00"));
+        }
     }
 
     @LocalServerPort
@@ -70,10 +78,10 @@ class McpToolsIntegrationTest {
     }
 
     @Test
-    void 도구_세_개가_보인다() {
+    void 도구_네_개가_보인다() {
         var tools = client.listTools().tools();
         assertThat(tools).extracting(McpSchema.Tool::name)
-                .containsExactlyInAnyOrder("schedule_add", "schedule_list", "schedule_delete");
+                .containsExactlyInAnyOrder("schedule_add", "schedule_list", "schedule_delete", "schedule_briefing");
         McpSchema.Tool list = tools.stream().filter(t -> t.name().equals("schedule_list")).findFirst().orElseThrow();
         assertThat(list.annotations().readOnlyHint()).isTrue();
         assertThat(list.annotations().destructiveHint()).isFalse();
@@ -90,7 +98,9 @@ class McpToolsIntegrationTest {
         assertThat(added.path("occasion").asString()).isEqualTo("wedding");
         assertThat(added.path("placeCategory").asString()).isEqualTo("예식장");
         assertThat(added.path("spokenSummary").asString())
-                .isEqualTo("11월 14일 토요일 오후 2시, 더채플앳청담에서 친구 결혼식을 등록했어요.");
+                .isEqualTo("11월 14일 토요일 오후 2시, 더채플앳청담에서 친구 결혼식을 등록했어요. "
+                        + "그날 입을 옷은 미리 드라이클리닝을 맡기면 좋아요. 보통 1~3일 걸려요.");
+        assertThat(added.path("careTip").asString()).isEqualTo("그날 입을 옷은 미리 드라이클리닝을 맡기면 좋아요. 보통 1~3일 걸려요.");
         String eventId = added.path("eventId").asString();
         assertThat(eventId).startsWith("e_");
 
@@ -128,7 +138,28 @@ class McpToolsIntegrationTest {
                 "start", "2026-11-04T10:00:00"));
         assertThat(added.path("occasion").asString()).isEqualTo("formal");
         assertThat(added.path("placeCategory").isNull() || added.path("placeCategory").isMissingNode()).isTrue();
-        assertThat(added.path("spokenSummary").asString()).isEqualTo("11월 4일 수요일 오전 10시, 면접을 등록했어요.");
+        assertThat(added.path("spokenSummary").asString()).isEqualTo("11월 4일 수요일 오전 10시, 면접을 등록했어요. "
+                + "그날 입을 옷은 미리 드라이클리닝을 맡기면 좋아요. 보통 1~3일 걸려요.");
+    }
+
+    @Test
+    void 브리핑은_도구와_REST가_같다() throws Exception {
+        // 오늘은 2026-11-01(테스트 시계)
+        call("schedule_add", Map.of("userId", userId, "title", "친구랑 점심", "start", "2026-11-01T12:30:00+09:00"));
+        call("schedule_add", Map.of("userId", userId, "title", "면접", "start", "2026-11-03T14:00:00+09:00"));
+        JsonNode b = call("schedule_briefing", Map.of("userId", userId));
+        assertThat(b.path("spoken").asString()).isEqualTo("오늘은 오후 12시 30분에 친구랑 점심 일정이 있어요. "
+                + "모레 11월 3일 화요일 오후 2시에 면접 일정이 있어요. "
+                + "입을 옷은 세탁소에 맡기셨어요? 드라이클리닝은 보통 1~3일 걸려서 아직이면 오늘 맡기면 좋아요.");
+        assertThat(b.path("today")).hasSize(1);
+        assertThat(b.path("upcoming").get(0).path("occasion").asString()).isEqualTo("formal");
+
+        HttpResponse<String> rest = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1/schedules/briefing"))
+                        .header("X-User-Id", userId).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(rest.statusCode()).isEqualTo(200);
+        assertThat(json.readTree(rest.body()).path("spoken").asString()).isEqualTo(b.path("spoken").asString());
     }
 
     @Test

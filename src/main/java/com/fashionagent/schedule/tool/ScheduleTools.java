@@ -19,7 +19,7 @@ import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * agent가 부르는 MCP 도구 3개(약속 문서 mcp-tools.md).
+ * agent가 부르는 MCP 도구 4개(약속 문서 mcp-tools.md).
  *
  * <p>방식 비교(Spring AI @McpTool / @Tool / MCP Java SDK) 결과 @McpTool을 씁니다. 스키마가 메서드에서 자동으로 나오고,
  * 도구 성격(annotations)과 isError를 직접 정할 수 있기 때문입니다.
@@ -50,7 +50,8 @@ public class ScheduleTools {
     @McpTool(name = "schedule_add",
             description = "사용자의 일정을 하나 등록합니다. \"다음 주 토요일 두 시에 친구 결혼식\"처럼 일정을 넣어 달라고 할 때 씁니다. "
                     + "말에서 제목·시작 시각·장소를 나눠 넣으세요. 장소가 있으면 지도에서 장소 종류를 찾아 자리 종류(occasion)를 정합니다. "
-                    + "돌려주는 spokenSummary를 사용자에게 그대로 읽어 주면 됩니다.",
+                    + "돌려주는 spokenSummary를 사용자에게 그대로 읽어 주면 됩니다. "
+                    + "면접·결혼식·장례식 같은 격식 자리면 spokenSummary 끝에 드라이클리닝 안내(careTip)가 붙어 있습니다.",
             annotations = @McpAnnotations(title = "일정 등록", readOnlyHint = false, destructiveHint = false,
                     idempotentHint = false, openWorldHint = true))
     public CallToolResult scheduleAdd(
@@ -71,6 +72,17 @@ public class ScheduleTools {
             @McpToolParam(description = "사용자 id(UUID). agent가 채웁니다.", required = true) String userId,
             @McpToolParam(description = "날짜 YYYY-MM-DD (Asia/Seoul 기준). 비우면 오늘", required = false) String date) {
         return run(() -> new ListResult(service.list(userId, date)));
+    }
+
+    @McpTool(name = "schedule_briefing",
+            description = "오늘 일정과 3일 안에 있는 중요한 일정(면접·결혼식·장례식 같은 격식 자리)을 한 번에 알려 줍니다. "
+                    + "앱을 열고 인사한 뒤나 \"오늘 뭐 있어?\", \"이번 주 중요한 일정 있어?\"에 씁니다. "
+                    + "중요한 일정이 있으면 입을 옷을 세탁소에 맡겼는지 묻는 말이 붙어 있습니다. spoken을 그대로 읽어 주면 됩니다.",
+            annotations = @McpAnnotations(title = "일정 브리핑", readOnlyHint = true, destructiveHint = false,
+                    idempotentHint = true, openWorldHint = false))
+    public CallToolResult scheduleBriefing(
+            @McpToolParam(description = "사용자 id(UUID). agent가 채웁니다.", required = true) String userId) {
+        return run(() -> service.briefing(userId));
     }
 
     @McpTool(name = "schedule_delete",

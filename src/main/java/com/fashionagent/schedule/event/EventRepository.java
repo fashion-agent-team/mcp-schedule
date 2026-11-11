@@ -1,6 +1,7 @@
 package com.fashionagent.schedule.event;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -17,4 +18,8 @@ public interface EventRepository extends JpaRepository<Event, String> {
 
     /** 알림 대상: [from, to) 사이에 시작하고 아직 알리지 않은 모든 사용자의 일정. */
     List<Event> findByStartAtGreaterThanEqualAndStartAtLessThanAndNotifiedAtIsNull(Instant from, Instant to);
+
+    /** 드라이클리닝 알림 대상: 이 자리 종류 중 [from, to) 사이에 시작하고 아직 안내하지 않은 일정. */
+    List<Event> findByOccasionInAndStartAtGreaterThanEqualAndStartAtLessThanAndCareRemindedAtIsNull(
+            Collection<Occasion> occasions, Instant from, Instant to);
 }
