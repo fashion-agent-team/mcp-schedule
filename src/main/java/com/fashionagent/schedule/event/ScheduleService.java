@@ -96,6 +96,57 @@ public class ScheduleService {
                 .toList();
     }
 
+    /**
+     * 앱을 열었을 때 인사 뒤에 읽어 줄 일정 안내.
+     *
+     * @param spoken 그대로 읽어 줄 문장
+     * @param today 오늘 일정(시작 순)
+     * @param upcoming 내일부터 3일 뒤까지의 격식 일정(면접·결혼식·장례식 등, 시작 순)
+     */
+    public record Briefing(String spoken, List<EventView> today, List<EventView> upcoming) {
+    }
+
+    /**
+     * 오늘 일정과 3일 안에 있는 중요한(격식) 일정을 한 번에 읽어 줄 문장으로 만듭니다. 읽기만 하고 알림 기록은 바꾸지 않습니다.
+     * <p>예: "오늘은 오후 7시에 친구랑 저녁 일정이 있어요. 모레 11월 13일 금요일 오후 2시에 면접 일정이 있어요. 입을 옷은 세탁소에 맡기셨어요? …"
+     */
+    @Transactional(readOnly = true)
+    public Briefing briefing(String userId) {
+        UUID user = parseUserId(userId);
+        LocalDate day = today();
+        List<Event> todays = repository.findByUserIdAndStartAtGreaterThanEqualAndStartAtLessThanOrderByStartAtAsc(
+                user, day.atStartOfDay(zone).toInstant(), day.plusDays(1).atStartOfDay(zone).toInstant());
+        List<Event> soon = repository.findByUserIdAndStartAtGreaterThanEqualAndStartAtLessThanOrderByStartAtAsc(
+                user, day.plusDays(1).atStartOfDay(zone).toInstant(),
+                day.plusDays(DryCleaningAdvice.REMIND_DAYS_BEFORE + 1L).atStartOfDay(zone).toInstant())
+                .stream().filter(e -> DryCleaningAdvice.applies(e.getOccasion())).toList();
+
+        StringBuilder spoken = new StringBuilder();
+        if (todays.isEmpty()) {
+            spoken.append("오늘은 일정이 없어요.");
+        } else if (todays.size() == 1) {
+            spoken.append("오늘은 ").append(oneLine(todays.getFirst())).append(" 일정이 있어요.");
+        } else {
+            spoken.append("오늘 일정은 ").append(todays.size()).append("개예요. ");
+            spoken.append(String.join(", ", todays.stream().map(this::oneLine).toList())).append(".");
+        }
+        for (Event e : soon) {
+            spoken.append(" ").append(DryCleaningAdvice.upcoming(e.getTitle(), day, e.getStartAt().atZone(zone)));
+        }
+        if (!soon.isEmpty()) {
+            spoken.append(" ").append(DryCleaningAdvice.ASK);
+        }
+        return new Briefing(spoken.toString(),
+                todays.stream().map(e -> EventView.of(e, zone)).toList(),
+                soon.stream().map(e -> EventView.of(e, zone)).toList());
+    }
+
+    /** "오후 2시에 더채플앳청담에서 친구 결혼식" */
+    private String oneLine(Event e) {
+        String where = e.getPlace() == null ? "" : e.getPlace() + "에서 ";
+        return KoreanText.spokenTime(e.getStartAt().atZone(zone)) + "에 " + where + e.getTitle();
+    }
+
     @Transactional
     public boolean delete(String userId, String eventId) {
         UUID user = parseUserId(userId);

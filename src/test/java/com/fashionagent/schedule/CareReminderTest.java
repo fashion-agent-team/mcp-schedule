@@ -153,4 +153,33 @@ class CareReminderTest {
         reminder.sendCareReminders();
         assertThat(SENT).isEmpty();
     }
+
+    @Test
+    void 브리핑_일정이_없으면() {
+        today("2026-11-11");
+        assertThat(service.briefing(userId).spoken()).isEqualTo("오늘은 일정이 없어요.");
+    }
+
+    @Test
+    void 브리핑_오늘_일정_여러_개와_3일_안_중요한_일정() {
+        today("2026-11-11");
+        service.add(userId, "팀 회의", "2026-11-11T10:00:00+09:00", null);
+        service.add(userId, "친구 결혼식", "2026-11-11T14:00:00+09:00", "더채플앳청담");
+        service.add(userId, "친구랑 저녁", "2026-11-12T19:00:00+09:00", null); // 격식 아님 → 안 읽음
+        service.add(userId, "면접", "2026-11-14T10:00:00+09:00", null);
+        service.add(userId, "발표", "2026-11-15T10:00:00+09:00", null); // 4일 뒤 → 안 읽음
+        var b = service.briefing(userId);
+        assertThat(b.spoken()).isEqualTo("오늘 일정은 2개예요. 오전 10시에 팀 회의, 오후 2시에 더채플앳청담에서 친구 결혼식. "
+                + "3일 뒤 11월 14일 토요일 오전 10시에 면접 일정이 있어요. "
+                + "입을 옷은 세탁소에 맡기셨어요? 드라이클리닝은 보통 1~3일 걸려서 아직이면 오늘 맡기면 좋아요.");
+        assertThat(b.today()).hasSize(2);
+        assertThat(b.upcoming()).extracting(e -> e.title()).containsExactly("면접");
+    }
+
+    @Test
+    void 브리핑은_다른_사람_일정을_읽지_않는다() {
+        today("2026-11-11");
+        service.add(UUID.randomUUID().toString(), "면접", "2026-11-12T10:00:00+09:00", null);
+        assertThat(service.briefing(userId).spoken()).isEqualTo("오늘은 일정이 없어요.");
+    }
 }

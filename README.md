@@ -62,6 +62,7 @@ agent는 이 값을 보고 그날 어떤 옷이 맞는지 정합니다. 이 서�
 | `schedule_add` | 일정 하나 등록 | 쓰기, 외부 API 사용(`openWorldHint`) |
 | `schedule_list` | 날짜별 일정 보기 | 읽기 전용 |
 | `schedule_delete` | 일정 하나 삭제 | 지우는 도구(`destructiveHint`) |
+| `schedule_briefing` | 오늘 일정 + 3일 안 중요한 일정을 읽어 줄 문장으로 | 읽기 전용 |
 
 `userId`는 모든 도구에 들어가며, agent가 Gateway에서 받은 `X-User-Id` 값으로 덮어써서 넣습니다. UUID여야 합니다.
 
@@ -122,6 +123,26 @@ agent는 이 값을 보고 그날 어떤 옷이 맞는지 정합니다. 이 서�
 
 입력: `userId`, `eventId`(`schedule_list` 결과의 값). 출력: `{"deleted": true}`.
 "토요일 결혼식 지워 줘"처럼 말하면 agent가 먼저 `schedule_list`로 `eventId`를 찾은 뒤 부릅니다. 다른 사람의 일정은 지울 수 없습니다(`not_found`).
+
+### `schedule_briefing`
+
+앱을 열고 인사한 뒤에 읽어 줄 안내입니다. 오늘 일정과, 내일부터 3일 뒤까지의 **격식 일정**(면접·결혼식·장례식 등)을 한 번에 돌려줍니다. 중요한 일정이 있으면 입을 옷을 세탁소에 맡겼는지 묻는 말이 붙습니다([드라이클리닝 안내](#격식-일정-드라이클리닝-안내)). 읽기만 하고 알림 기록은 바꾸지 않습니다.
+
+입력: `userId`만.
+
+출력
+
+```json
+{
+  "spoken": "오늘은 오후 7시에 친구랑 저녁 일정이 있어요. 모레 11월 13일 금요일 오후 2시에 면접 일정이 있어요. 입을 옷은 세탁소에 맡기셨어요? 드라이클리닝은 보통 1~3일 걸려서 아직이면 오늘 맡기면 좋아요.",
+  "today": [ { "eventId": "…", "title": "친구랑 저녁", "occasion": "casual", "…": "…" } ],
+  "upcoming": [ { "eventId": "…", "title": "면접", "occasion": "formal", "…": "…" } ]
+}
+```
+
+- `spoken`: 그대로 읽어 주면 되는 문장. 오늘 일정이 없으면 "오늘은 일정이 없어요."로 시작합니다. 오늘 일정이 여럿이면 "오늘 일정은 2개예요. 오전 10시에 팀 회의, 오후 2시에 …"
+- `today`, `upcoming`: `schedule_list`의 일정 모양과 같습니다. 격식이 아닌 3일 안 일정은 `upcoming`에 넣지 않습니다.
+- 앱은 REST `GET /api/v1/schedules/briefing`으로 같은 값을 받을 수 있습니다([REST API](#rest-api)).
 
 ### 결과와 오류 모양
 
@@ -235,6 +256,7 @@ curl -H 'X-User-Id: 11111111-1111-1111-1111-111111111111' \
 ```
 
 - 응답 모양은 `schedule_list`와 같습니다(`{"events": [...]}`).
+- **`GET /api/v1/schedules/briefing`**: 앱을 열고 인사한 뒤 읽어 줄 안내. 응답은 `schedule_briefing`과 같습니다(`spoken`을 그대로 읽으면 됨).
 - `X-User-Id`가 없으면 `401 unauthorized`, 입력이 틀리면 `400 bad_request`.
 
 ## 실행 방법
@@ -319,19 +341,19 @@ npx @modelcontextprotocol/inspector
 
 | 테스트 | 확인하는 것 |
 | --- | --- |
-| `McpToolsIntegrationTest` | MCP 클라이언트로 서버에 붙어 도구 3개가 보이는지, 추가→조회→삭제, 장소 없는 일정·시간대 없는 시각, 잘못된 입력의 오류 모양 |
+| `McpToolsIntegrationTest` | MCP 클라이언트로 서버에 붙어 도구 4개가 보이는지, 추가→조회→삭제, 브리핑 도구와 REST가 같은지, 장소 없는 일정·시간대 없는 시각, 잘못된 입력의 오류 모양 |
 | `OccasionClassifierTest` | 제목 키워드 판단, 제목 우선·장소 보강, `occasion_source` 기록, 한 글자 키워드 처리 |
 | `KakaoLocalClientTest` | 카카오 응답에서 장소 종류 읽기, 실패하면 빈 값, 키가 없으면 부르지 않음 |
 | `KoreanTextTest` | "을/를" 붙이기, 읽어 줄 날짜·시각 문장 |
 | `DryCleaningAdviceTest` | 격식 자리만 안내, 남은 날에 맞춘 등록 문장, 3일 전 알림 문장 |
-| `CareReminderTest` | 날짜를 옮겨 가며 3일 전 아침에 한 번만 알림, 놓치면 다음 날, 가까이 등록하면 알림 안 함, 격식 아닌 일정·당일 일정 제외 |
+| `CareReminderTest` | 날짜를 옮겨 가며 3일 전 아침에 한 번만 알림, 놓치면 다음 날, 가까이 등록하면 알림 안 함, 격식 아닌 일정·당일 일정 제외, 브리핑 문장(일정 없음·여러 개·3일 안 중요 일정·다른 사람 일정 제외) |
 
 ## 폴더 구조
 
 ```
 src/main/java/com/fashionagent/schedule/
-├── tool/ScheduleTools.java        MCP 도구 3개
-├── api/ScheduleController.java    REST GET /api/v1/schedules
+├── tool/ScheduleTools.java        MCP 도구 4개
+├── api/ScheduleController.java    REST GET /api/v1/schedules, /briefing
 ├── event/                         일정 저장·조회(ScheduleService), 자리 종류 판단(OccasionClassifier), 드라이클리닝 문장(DryCleaningAdvice)
 ├── place/                         장소 검색(PlaceLookup, KakaoLocalClient)
 ├── notify/                        아침 8시 알림(MorningReminder), 3일 전 드라이클리닝 알림(CareReminder), LoggingNotifier
@@ -348,6 +370,8 @@ src/main/resources/
 - [x] 제목 키워드로 자리 종류 정하기 → 카카오 로컬로 장소 종류 보강
 - [x] PR 자동 테스트(GitHub Actions)
 - [x] 격식 일정 드라이클리닝 안내(등록 때 + 3일 전)
+- [x] 앱 인사용 브리핑(`schedule_briefing`, `GET /api/v1/schedules/briefing`)
+- [ ] 앱 인사 뒤에 브리핑 읽기 (앱 쪽, 인사 대사는 진행 님과 맞춘 뒤)
 - [ ] 아침 알림·3일 전 알림 실제 푸시 붙이기 (gateway에 발송 API가 생기면 그걸 부르도록)
 - [x] 실제 카카오 키로 장소 30곳 검색해 분류 키워드 표 확인 (화장터·국립공원 추가)
 

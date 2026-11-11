@@ -66,15 +66,22 @@ public final class DryCleaningAdvice {
         return Optional.empty();
     }
 
-    /** 며칠 전 알림 문장. 예: "3일 뒤 11월 14일 토요일 오후 2시에 면접 일정이 있어요. 입을 옷은 세탁소에 맡기셨어요? …" */
-    public static String reminder(String title, LocalDate today, ZonedDateTime start) {
+    /** 미리 묻는 말. 며칠 전 알림과 앱 인사 브리핑 끝에 붙입니다. */
+    public static final String ASK = "입을 옷은 세탁소에 맡기셨어요? 드라이클리닝은 보통 1~3일 걸려서 아직이면 오늘 맡기면 좋아요.";
+
+    /** 며칠 뒤 일정 한 문장. 예: "3일 뒤 11월 14일 토요일 오후 2시에 면접 일정이 있어요." */
+    public static String upcoming(String title, LocalDate today, ZonedDateTime start) {
         long days = daysUntil(today, start);
         String when = switch ((int) days) {
             case 1 -> "내일";
             case 2 -> "모레";
             default -> days + "일 뒤";
         };
-        return when + " " + KoreanText.spokenDateTime(start) + "에 " + title + " 일정이 있어요. "
-                + "입을 옷은 세탁소에 맡기셨어요? 드라이클리닝은 보통 1~3일 걸려서 아직이면 오늘 맡기면 좋아요.";
+        return when + " " + KoreanText.spokenDateTime(start) + "에 " + title + " 일정이 있어요.";
+    }
+
+    /** 며칠 전 알림 문장. 예: "3일 뒤 11월 14일 토요일 오후 2시에 면접 일정이 있어요. 입을 옷은 세탁소에 맡기셨어요? …" */
+    public static String reminder(String title, LocalDate today, ZonedDateTime start) {
+        return upcoming(title, today, start) + " " + ASK;
     }
 }
