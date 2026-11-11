@@ -15,12 +15,13 @@ agent는 이 값을 보고 그날 어떤 옷이 맞는지 정합니다. 이 서�
 4. [자리 종류(occasion) 정하는 법](#자리-종류occasion-정하는-법)
 5. [저장 방식](#저장-방식)
 6. [아침 8시 알림](#아침-8시-알림)
-7. [REST API](#rest-api)
-8. [실행 방법](#실행-방법)
-9. [테스트](#테스트)
-10. [폴더 구조](#폴더-구조)
-11. [할 일](#할-일)
-12. [공통 약속 · 브랜치 · 비밀 값](#공통-약속)
+7. [격식 일정 드라이클리닝 안내](#격식-일정-드라이클리닝-안내)
+8. [REST API](#rest-api)
+9. [실행 방법](#실행-방법)
+10. [테스트](#테스트)
+11. [폴더 구조](#폴더-구조)
+12. [할 일](#할-일)
+13. [공통 약속 · 브랜치 · 비밀 값](#공통-약속)
 
 ## 한눈에
 
@@ -82,12 +83,14 @@ agent는 이 값을 보고 그날 어떤 옷이 맞는지 정합니다. 이 서�
   "eventId": "e_k3m8pq2xa9vd",
   "occasion": "wedding",
   "placeCategory": "예식장",
-  "spokenSummary": "11월 14일 토요일 오후 2시, 더채플앳청담에서 친구 결혼식을 등록했어요."
+  "spokenSummary": "11월 14일 토요일 오후 2시, 더채플앳청담에서 친구 결혼식을 등록했어요. 그날 입을 옷은 미리 드라이클리닝을 맡기면 좋아요. 보통 1~3일 걸려요.",
+  "careTip": "그날 입을 옷은 미리 드라이클리닝을 맡기면 좋아요. 보통 1~3일 걸려요."
 }
 ```
 
 - `placeCategory`: 장소가 없거나 카카오에서 못 찾으면 `null`.
-- `spokenSummary`: 그대로 읽어 주면 되는 문장. "을/를"은 받침에 맞춰 붙입니다.
+- `spokenSummary`: 그대로 읽어 주면 되는 문장. "을/를"은 받침에 맞춰 붙입니다. 격식 일정이면 끝에 `careTip`이 붙어 있어서 agent는 따로 할 일이 없습니다.
+- `careTip`: 격식 일정의 드라이클리닝 안내([아래](#격식-일정-드라이클리닝-안내)). 그 밖의 일정이면 `null`.
 
 ### `schedule_list`
 
@@ -180,11 +183,12 @@ agent는 이 값을 보고 그날 어떤 옷이 맞는지 정합니다. 이 서�
 | `occasion` | varchar(20) | 자리 종류 (위 6가지만) |
 | `occasion_source` | varchar(10) | `title` / `place` / `default` |
 | `notified_at` | timestamptz | 아침 알림 보낸 시각 (아직이면 null) |
+| `care_reminded_at` | timestamptz | 격식 일정 드라이클리닝 안내를 마친 시각 (아직이면 null) |
 | `created_at`, `updated_at` | timestamptz | 만든·고친 시각 |
 
 인덱스: `(user_id, start_at)` (하루 일정 조회), `(start_at)` (아침 알림).
 
-- 테이블은 **Flyway**(`src/main/resources/db/migration/V1__init.sql`)가 만듭니다. `schedule` 스키마가 없으면 Flyway가 먼저 만듭니다. JPA는 엔티티와 테이블이 맞는지 확인만 합니다(`ddl-auto: validate`).
+- 테이블은 **Flyway**(`src/main/resources/db/migration/V1__init.sql`, 열 추가는 `V2__care_reminded_at.sql`)가 만듭니다. `schedule` 스키마가 없으면 Flyway가 먼저 만듭니다. JPA는 엔티티와 테이블이 맞는지 확인만 합니다(`ddl-auto: validate`).
 - 표 설계는 프로젝트 DB 설계(`db/schema.sql`의 schedule 부분)를 따릅니다.
 - **`SPRING_DATASOURCE_URL`이 없으면 메모리 DB(H2, PostgreSQL 모드)로 뜹니다.** 테스트나 빠른 확인용이고, **서버를 껐다 켜면 일정이 모두 사라집니다.**
 
@@ -199,6 +203,27 @@ agent는 이 값을 보고 그날 어떤 옷이 맞는지 정합니다. 이 서�
 - 푸시를 보내려면 사용자 폰의 주소(FCM 토큰)가 필요한데, 이 주소는 개인정보라 **gateway만 갖고 있고 일정 서버는 보지 않습니다.**
 - 그래서 일정 서버는 "이 사용자에게 이 문장을 보내 주세요"만 gateway에 부탁하고, **실제 발송은 gateway가 합니다.** (안: `POST /internal/push {userId, title, body}`)
 - gateway 쪽 기능이 생기면 `Notifier` 구현(예: `GatewayPushNotifier`)을 하나 만들어 `LoggingNotifier` 대신 끼우면 됩니다.
+
+## 격식 일정 드라이클리닝 안내
+
+시각장애인은 혼자 다림질하기 어렵고, 사진으로 구김을 찾기도 어렵습니다. 그래서 구김을 찾는 대신 **격식 일정이 잡히면 그날 입을 옷을 미리 세탁소에 맡기라고 말해 줍니다.** 드라이클리닝은 보통 1~3일 걸려서 당일 아침 알림으로는 늦기 때문에 두 번 말합니다.
+
+대상 자리: `formal`(면접·발표·상견례 등), `wedding`(결혼식), `mourning`(장례식). 회의·출근(`business`)은 매일 입는 옷이라 뺍니다.
+
+1. **등록할 때** — `schedule_add`의 `spokenSummary` 끝에 붙여서 agent가 그대로 읽어 줍니다. 남은 날에 따라 문장이 다릅니다.
+
+   | 남은 날 | 문장 |
+   | --- | --- |
+   | 3일 이상 | 그날 입을 옷은 미리 드라이클리닝을 맡기면 좋아요. 보통 1~3일 걸려요. |
+   | 모레 | 그날 입을 옷은 오늘이나 내일 드라이클리닝을 맡기면 좋아요. 보통 1~3일 걸려요. |
+   | 내일 | 내일이라 드라이클리닝은 빠듯해요. 빨리 해 주는 세탁소를 찾아보거나, 입을 옷을 오늘 미리 꺼내 걸어 두세요. |
+   | 오늘·지난 일정 | (말하지 않음) |
+
+2. **3일 전 아침 8시** — 코드는 `notify/CareReminder.java`(`schedule.care-reminder.cron`). 내일~3일 뒤 시작하는 격식 일정 중 아직 안내 안 한 것(`care_reminded_at IS NULL`)에 보냅니다.
+   - 문장 예: "3일 뒤 11월 14일 토요일 오후 2시에 면접 일정이 있어요. 입을 옷은 세탁소에 맡기셨어요? 드라이클리닝은 보통 1~3일 걸려서 아직이면 오늘 맡기면 좋아요."
+   - 3일 전에 서버가 꺼져 있었으면 다음 날 "모레 …"로 보냅니다. 당일 일정은 아침 알림이 맡습니다.
+   - 등록할 때 이미 3일 안쪽이었으면 등록 때 말한 것으로 끝내고 따로 보내지 않습니다(등록 때 `care_reminded_at`을 채움).
+   - 아침 알림과 같은 `Notifier`로 보냅니다. **지금은 로그만 남고**, 실제 푸시는 gateway 발송 API가 생기면 함께 붙습니다.
 
 ## REST API
 
@@ -298,6 +323,8 @@ npx @modelcontextprotocol/inspector
 | `OccasionClassifierTest` | 제목 키워드 판단, 제목 우선·장소 보강, `occasion_source` 기록, 한 글자 키워드 처리 |
 | `KakaoLocalClientTest` | 카카오 응답에서 장소 종류 읽기, 실패하면 빈 값, 키가 없으면 부르지 않음 |
 | `KoreanTextTest` | "을/를" 붙이기, 읽어 줄 날짜·시각 문장 |
+| `DryCleaningAdviceTest` | 격식 자리만 안내, 남은 날에 맞춘 등록 문장, 3일 전 알림 문장 |
+| `CareReminderTest` | 날짜를 옮겨 가며 3일 전 아침에 한 번만 알림, 놓치면 다음 날, 가까이 등록하면 알림 안 함, 격식 아닌 일정·당일 일정 제외 |
 
 ## 폴더 구조
 
@@ -305,13 +332,13 @@ npx @modelcontextprotocol/inspector
 src/main/java/com/fashionagent/schedule/
 ├── tool/ScheduleTools.java        MCP 도구 3개
 ├── api/ScheduleController.java    REST GET /api/v1/schedules
-├── event/                         일정 저장·조회(ScheduleService), 자리 종류 판단(OccasionClassifier)
+├── event/                         일정 저장·조회(ScheduleService), 자리 종류 판단(OccasionClassifier), 드라이클리닝 문장(DryCleaningAdvice)
 ├── place/                         장소 검색(PlaceLookup, KakaoLocalClient)
-├── notify/                        아침 8시 알림(MorningReminder, LoggingNotifier)
+├── notify/                        아침 8시 알림(MorningReminder), 3일 전 드라이클리닝 알림(CareReminder), LoggingNotifier
 └── common/                        오류 모양, 한국어 문장 도우미
 src/main/resources/
 ├── application.yml
-└── db/migration/V1__init.sql      schedule.events 테이블
+└── db/migration/                  V1 schedule.events 테이블, V2 care_reminded_at 열
 ```
 
 ## 할 일
@@ -320,7 +347,8 @@ src/main/resources/
 - [x] `events` 테이블(Flyway), `schedule_add`·`schedule_list`·`schedule_delete`
 - [x] 제목 키워드로 자리 종류 정하기 → 카카오 로컬로 장소 종류 보강
 - [x] PR 자동 테스트(GitHub Actions)
-- [ ] 아침 알림 실제 푸시 붙이기 (gateway에 발송 API가 생기면 그걸 부르도록)
+- [x] 격식 일정 드라이클리닝 안내(등록 때 + 3일 전)
+- [ ] 아침 알림·3일 전 알림 실제 푸시 붙이기 (gateway에 발송 API가 생기면 그걸 부르도록)
 - [x] 실제 카카오 키로 장소 30곳 검색해 분류 키워드 표 확인 (화장터·국립공원 추가)
 
 ## 공통 약속

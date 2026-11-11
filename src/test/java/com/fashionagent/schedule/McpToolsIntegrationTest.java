@@ -6,6 +6,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -43,6 +44,13 @@ class McpToolsIntegrationTest {
             return name -> name.contains("채플")
                     ? Optional.of(PlaceInfo.of("12345678", "더채플앳청담", "가정,생활 > 예식장"))
                     : Optional.empty();
+        }
+
+        /** 오늘을 2026-11-01(한국 시각)로 고정합니다. */
+        @Bean
+        @Primary
+        MutableClock testClock() {
+            return new MutableClock(Instant.parse("2026-11-01T09:00:00+09:00"));
         }
     }
 
@@ -90,7 +98,9 @@ class McpToolsIntegrationTest {
         assertThat(added.path("occasion").asString()).isEqualTo("wedding");
         assertThat(added.path("placeCategory").asString()).isEqualTo("예식장");
         assertThat(added.path("spokenSummary").asString())
-                .isEqualTo("11월 14일 토요일 오후 2시, 더채플앳청담에서 친구 결혼식을 등록했어요.");
+                .isEqualTo("11월 14일 토요일 오후 2시, 더채플앳청담에서 친구 결혼식을 등록했어요. "
+                        + "그날 입을 옷은 미리 드라이클리닝을 맡기면 좋아요. 보통 1~3일 걸려요.");
+        assertThat(added.path("careTip").asString()).isEqualTo("그날 입을 옷은 미리 드라이클리닝을 맡기면 좋아요. 보통 1~3일 걸려요.");
         String eventId = added.path("eventId").asString();
         assertThat(eventId).startsWith("e_");
 
@@ -128,7 +138,8 @@ class McpToolsIntegrationTest {
                 "start", "2026-11-04T10:00:00"));
         assertThat(added.path("occasion").asString()).isEqualTo("formal");
         assertThat(added.path("placeCategory").isNull() || added.path("placeCategory").isMissingNode()).isTrue();
-        assertThat(added.path("spokenSummary").asString()).isEqualTo("11월 4일 수요일 오전 10시, 면접을 등록했어요.");
+        assertThat(added.path("spokenSummary").asString()).isEqualTo("11월 4일 수요일 오전 10시, 면접을 등록했어요. "
+                + "그날 입을 옷은 미리 드라이클리닝을 맡기면 좋아요. 보통 1~3일 걸려요.");
     }
 
     @Test

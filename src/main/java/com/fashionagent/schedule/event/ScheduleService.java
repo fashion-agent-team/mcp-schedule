@@ -1,6 +1,7 @@
 package com.fashionagent.schedule.event;
 
 import java.security.SecureRandom;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -31,16 +32,22 @@ public class ScheduleService {
     private final PlaceLookup placeLookup;
     private final OccasionClassifier classifier;
     private final ZoneId zone;
+    private final Clock clock;
 
     public ScheduleService(EventRepository repository, PlaceLookup placeLookup,
-            OccasionClassifier classifier, @Value("${schedule.zone:Asia/Seoul}") String zone) {
+            OccasionClassifier classifier, @Value("${schedule.zone:Asia/Seoul}") String zone, Clock clock) {
         this.repository = repository;
         this.placeLookup = placeLookup;
         this.classifier = classifier;
         this.zone = ZoneId.of(zone);
+        this.clock = clock;
     }
 
-    public record AddResult(String eventId, Occasion occasion, String placeCategory, String spokenSummary) {
+    /**
+     * @param careTip 격식 일정이면 드라이클리닝 안내 문장, 아니면 null. spokenSummary 뒤에도 붙어 있습니다.
+     */
+    public record AddResult(String eventId, Occasion occasion, String placeCategory, String spokenSummary,
+            String careTip) {
     }
 
     @Transactional
@@ -59,9 +66,21 @@ public class ScheduleService {
 
         Event event = new Event(newId(), user, cleanTitle, startAt.toInstant(), cleanPlace,
                 info == null ? null : info.id(), placeCategory, occasion.occasion(), occasion.source());
+
+        // 격식 자리면 드라이클리닝 안내. 이미 3일 안쪽이면 지금 말한 것으로 끝내고 3일 전 알림은 보내지 않습니다.
+        LocalDate today = today();
+        String careTip = DryCleaningAdvice.atRegistration(occasion.occasion(), today, startAt).orElse(null);
+        if (DryCleaningAdvice.applies(occasion.occasion())
+                && DryCleaningAdvice.daysUntil(today, startAt) <= DryCleaningAdvice.REMIND_DAYS_BEFORE) {
+            event.markCareReminded(Instant.now(clock));
+        }
         repository.save(event);
 
-        return new AddResult(event.getId(), occasion.occasion(), placeCategory, summary(startAt, cleanPlace, cleanTitle));
+        String spoken = summary(startAt, cleanPlace, cleanTitle);
+        if (careTip != null) {
+            spoken = spoken + " " + careTip;
+        }
+        return new AddResult(event.getId(), occasion.occasion(), placeCategory, spoken, careTip);
     }
 
     @Transactional(readOnly = true)
@@ -90,7 +109,7 @@ public class ScheduleService {
     }
 
     public LocalDate today() {
-        return LocalDate.now(zone);
+        return LocalDate.now(clock.withZone(zone));
     }
 
     public ZoneId zone() {

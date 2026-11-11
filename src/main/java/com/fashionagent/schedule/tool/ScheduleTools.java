@@ -50,7 +50,8 @@ public class ScheduleTools {
     @McpTool(name = "schedule_add",
             description = "사용자의 일정을 하나 등록합니다. \"다음 주 토요일 두 시에 친구 결혼식\"처럼 일정을 넣어 달라고 할 때 씁니다. "
                     + "말에서 제목·시작 시각·장소를 나눠 넣으세요. 장소가 있으면 지도에서 장소 종류를 찾아 자리 종류(occasion)를 정합니다. "
-                    + "돌려주는 spokenSummary를 사용자에게 그대로 읽어 주면 됩니다.",
+                    + "돌려주는 spokenSummary를 사용자에게 그대로 읽어 주면 됩니다. "
+                    + "면접·결혼식·장례식 같은 격식 자리면 spokenSummary 끝에 드라이클리닝 안내(careTip)가 붙어 있습니다.",
             annotations = @McpAnnotations(title = "일정 등록", readOnlyHint = false, destructiveHint = false,
                     idempotentHint = false, openWorldHint = true))
     public CallToolResult scheduleAdd(

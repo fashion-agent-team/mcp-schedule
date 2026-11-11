@@ -17,4 +17,10 @@ public class LoggingNotifier implements Notifier {
         log.info("[알림 자리] user={} event={} : {}", event.getUserId(), event.getId(), message);
         return true;
     }
+
+    @Override
+    public boolean notifyBefore(Event event, String message) {
+        log.info("[미리 알림 자리] user={} event={} : {}", event.getUserId(), event.getId(), message);
+        return true;
+    }
 }
