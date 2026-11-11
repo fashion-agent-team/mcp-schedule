@@ -19,7 +19,7 @@ import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * agent가 부르는 MCP 도구 4개(약속 문서 mcp-tools.md).
+ * agent가 부르는 MCP 도구 5개(약속 문서 mcp-tools.md).
  *
  * <p>방식 비교(Spring AI @McpTool / @Tool / MCP Java SDK) 결과 @McpTool을 씁니다. 스키마가 메서드에서 자동으로 나오고,
  * 도구 성격(annotations)과 isError를 직접 정할 수 있기 때문입니다.
@@ -83,6 +83,20 @@ public class ScheduleTools {
     public CallToolResult scheduleBriefing(
             @McpToolParam(description = "사용자 id(UUID). agent가 채웁니다.", required = true) String userId) {
         return run(() -> service.briefing(userId));
+    }
+
+    @McpTool(name = "schedule_set_reminder",
+            description = "일정의 폰 알림을 정합니다. 일정을 넣은 뒤 \"일정 전에 알림을 드릴까요?\", \"며칠 전에 미리 알려 드릴까요?\"에 "
+                    + "사용자가 답하면 부릅니다. remind=false면 알림 없음, daysBefore는 며칠 전 저녁 8시에 미리 알릴지(0이면 당일 아침만, 최대 14). "
+                    + "알림을 받으면 당일 아침에도 한 번 더 알립니다.",
+            annotations = @McpAnnotations(title = "일정 알림 설정", readOnlyHint = false, destructiveHint = false,
+                    idempotentHint = true, openWorldHint = false))
+    public CallToolResult scheduleSetReminder(
+            @McpToolParam(description = "사용자 id(UUID). agent가 채웁니다.", required = true) String userId,
+            @McpToolParam(description = "일정의 eventId (schedule_add·schedule_list 결과)", required = true) String eventId,
+            @McpToolParam(description = "알림을 받을지. 비우면 true", required = false) Boolean remind,
+            @McpToolParam(description = "며칠 전 저녁에 미리 알릴지 0~14. 비우면 1(전날)", required = false) Integer daysBefore) {
+        return run(() -> service.setReminder(userId, eventId, remind, daysBefore));
     }
 
     @McpTool(name = "schedule_delete",

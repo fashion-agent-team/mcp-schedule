@@ -33,10 +33,12 @@ public class ScheduleController {
     public record ListResponse(List<EventView> events) {
     }
 
+    /** date 하루, 또는 endDate까지(포함, 최대 31일). 앱은 알림을 맞출 때 여러 날을 한 번에 봅니다. */
     @GetMapping
     public ListResponse list(@RequestHeader("X-User-Id") String userId,
-            @RequestParam(required = false) String date) {
-        return new ListResponse(service.list(userId, date));
+            @RequestParam(required = false) String date,
+            @RequestParam(required = false) String endDate) {
+        return new ListResponse(service.list(userId, date, endDate));
     }
 
     /** 앱을 열었을 때 인사 뒤에 읽어 줄 오늘 일정과 3일 안 중요한 일정. spoken을 그대로 읽으면 됩니다. */

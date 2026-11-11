@@ -78,10 +78,11 @@ class McpToolsIntegrationTest {
     }
 
     @Test
-    void 도구_네_개가_보인다() {
+    void 도구_다섯_개가_보인다() {
         var tools = client.listTools().tools();
         assertThat(tools).extracting(McpSchema.Tool::name)
-                .containsExactlyInAnyOrder("schedule_add", "schedule_list", "schedule_delete", "schedule_briefing");
+                .containsExactlyInAnyOrder("schedule_add", "schedule_list", "schedule_delete", "schedule_briefing",
+                        "schedule_set_reminder");
         McpSchema.Tool list = tools.stream().filter(t -> t.name().equals("schedule_list")).findFirst().orElseThrow();
         assertThat(list.annotations().readOnlyHint()).isTrue();
         assertThat(list.annotations().destructiveHint()).isFalse();
@@ -130,6 +131,54 @@ class McpToolsIntegrationTest {
         assertThat(again.isError()).isTrue();
         assertThat(json.readTree(((McpSchema.TextContent) again.content().getFirst()).text())
                 .path("error").path("code").asString()).isEqualTo("not_found");
+    }
+
+    @Test
+    void 알림_설정과_여러_날_조회() throws Exception {
+        String wedding = call("schedule_add", Map.of("userId", userId, "title", "친구 결혼식",
+                "start", "2026-11-14T14:00:00+09:00")).path("eventId").asString();
+        String meeting = call("schedule_add", Map.of("userId", userId, "title", "회의",
+                "start", "2026-11-03T10:00:00+09:00")).path("eventId").asString();
+
+        // 묻기 전: 알림 켜짐, 며칠 전은 아직 안 정함
+        JsonNode before = call("schedule_list", Map.of("userId", userId, "date", "2026-11-14")).path("events").get(0);
+        assertThat(before.path("remind").asBoolean()).isTrue();
+        assertThat(before.path("remindDaysBefore").isNull()).isTrue();
+
+        JsonNode set = call("schedule_set_reminder", Map.of("userId", userId, "eventId", wedding,
+                "remind", true, "daysBefore", 3));
+        assertThat(set.path("remind").asBoolean()).isTrue();
+        assertThat(set.path("remindDaysBefore").asInt()).isEqualTo(3);
+        JsonNode off = call("schedule_set_reminder", Map.of("userId", userId, "eventId", meeting, "remind", false));
+        assertThat(off.path("remind").asBoolean()).isFalse();
+        assertThat(off.path("remindDaysBefore").isNull()).isTrue();
+
+        McpSchema.CallToolResult tooMany = client.callTool(new McpSchema.CallToolRequest("schedule_set_reminder",
+                Map.of("userId", userId, "eventId", wedding, "daysBefore", 30)));
+        assertThat(tooMany.isError()).isTrue();
+        McpSchema.CallToolResult other = client.callTool(new McpSchema.CallToolRequest("schedule_set_reminder",
+                Map.of("userId", UUID.randomUUID().toString(), "eventId", wedding, "remind", false)));
+        assertThat(other.isError()).isTrue();
+
+        // 앱: 오늘부터 여러 날을 한 번에
+        HttpResponse<String> rest = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + port
+                        + "/api/v1/schedules?date=2026-11-01&endDate=2026-11-20"))
+                        .header("X-User-Id", userId).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(rest.statusCode()).isEqualTo(200);
+        JsonNode events = json.readTree(rest.body()).path("events");
+        assertThat(events).hasSize(2);
+        assertThat(events.get(0).path("title").asString()).isEqualTo("회의");
+        assertThat(events.get(0).path("remind").asBoolean()).isFalse();
+        assertThat(events.get(1).path("remindDaysBefore").asInt()).isEqualTo(3);
+
+        HttpResponse<String> tooLong = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + port
+                        + "/api/v1/schedules?date=2026-11-01&endDate=2026-12-31"))
+                        .header("X-User-Id", userId).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(tooLong.statusCode()).isEqualTo(400);
     }
 
     @Test

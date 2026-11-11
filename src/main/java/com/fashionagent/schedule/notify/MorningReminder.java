@@ -40,6 +40,9 @@ public class MorningReminder {
         List<Event> events = repository.findByStartAtGreaterThanEqualAndStartAtLessThanAndNotifiedAtIsNull(from, to);
         int sent = 0;
         for (Event e : events) {
+            if (!e.isRemind()) {
+                continue; // 사용자가 "알림은 됐어"라고 한 일정
+            }
             if (notifier.notifyToday(e, message(e))) {
                 e.markNotified(Instant.now());
                 sent++;

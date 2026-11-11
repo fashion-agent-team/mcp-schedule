@@ -61,6 +61,14 @@ public class Event {
     @Column(name = "care_reminded_at")
     private Instant careRemindedAt;
 
+    /** 폰 알림을 받을지. false면 앱이 이 일정 알림을 예약하지 않습니다. */
+    @Column(nullable = false)
+    private boolean remind = true;
+
+    /** 며칠 전 저녁 8시에 미리 알릴지(0이면 당일 아침에만). null이면 아직 안 정함: 전날 저녁 + 당일 아침. */
+    @Column(name = "remind_days_before")
+    private Integer remindDaysBefore;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -102,6 +110,11 @@ public class Event {
         this.careRemindedAt = at;
     }
 
+    public void setReminder(boolean remind, Integer daysBefore) {
+        this.remind = remind;
+        this.remindDaysBefore = remind ? daysBefore : null;
+    }
+
     public String getId() { return id; }
     public UUID getUserId() { return userId; }
     public String getTitle() { return title; }
@@ -113,4 +126,6 @@ public class Event {
     public Occasion getOccasion() { return occasion; }
     public Instant getNotifiedAt() { return notifiedAt; }
     public Instant getCareRemindedAt() { return careRemindedAt; }
+    public boolean isRemind() { return remind; }
+    public Integer getRemindDaysBefore() { return remindDaysBefore; }
 }
