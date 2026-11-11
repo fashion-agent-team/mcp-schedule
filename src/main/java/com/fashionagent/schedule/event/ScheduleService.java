@@ -85,10 +85,26 @@ public class ScheduleService {
 
     @Transactional(readOnly = true)
     public List<EventView> list(String userId, String date) {
+        return list(userId, date, null);
+    }
+
+    /** 앱이 알림을 맞출 때 여러 날을 한 번에 봅니다. 한 번에 볼 수 있는 날 수. */
+    public static final int MAX_RANGE_DAYS = 31;
+
+    /** [date, endDate] 사이(둘 다 포함) 일정을 시작 순으로. endDate가 비면 date 하루. */
+    @Transactional(readOnly = true)
+    public List<EventView> list(String userId, String date, String endDate) {
         UUID user = parseUserId(userId);
         LocalDate day = parseDate(date);
+        LocalDate last = endDate == null || endDate.isBlank() ? day : parseDate(endDate);
+        if (last.isBefore(day)) {
+            throw ScheduleException.badRequest("endDate가 date보다 앞이에요.");
+        }
+        if (day.plusDays(MAX_RANGE_DAYS - 1L).isBefore(last)) {
+            throw ScheduleException.badRequest("한 번에 " + MAX_RANGE_DAYS + "일까지만 볼 수 있어요.");
+        }
         Instant from = day.atStartOfDay(zone).toInstant();
-        Instant to = day.plusDays(1).atStartOfDay(zone).toInstant();
+        Instant to = last.plusDays(1).atStartOfDay(zone).toInstant();
         return repository
                 .findByUserIdAndStartAtGreaterThanEqualAndStartAtLessThanOrderByStartAtAsc(user, from, to)
                 .stream()
@@ -145,6 +161,32 @@ public class ScheduleService {
     private String oneLine(Event e) {
         String where = e.getPlace() == null ? "" : e.getPlace() + "에서 ";
         return KoreanText.spokenTime(e.getStartAt().atZone(zone)) + "에 " + where + e.getTitle();
+    }
+
+    /** 며칠 전 알림은 이 날 수까지 받습니다. */
+    public static final int MAX_REMIND_DAYS = 14;
+
+    /**
+     * 일정 알림 설정. 일정을 넣은 뒤 agent가 "일정 전에 알림을 드릴까요?", "며칠 전에 미리 알려 드릴까요?"를 묻고 부릅니다.
+     *
+     * @param remind false면 알림 없음
+     * @param daysBefore 며칠 전 저녁에 미리 알릴지(0이면 당일 아침만). remind가 true인데 비면 1(전날)
+     */
+    @Transactional
+    public EventView setReminder(String userId, String eventId, Boolean remind, Integer daysBefore) {
+        UUID user = parseUserId(userId);
+        if (eventId == null || eventId.isBlank()) {
+            throw ScheduleException.badRequest("eventId가 비어 있어요.");
+        }
+        boolean on = remind == null || remind;
+        Integer days = on ? (daysBefore == null ? Integer.valueOf(1) : daysBefore) : null;
+        if (days != null && (days < 0 || days > MAX_REMIND_DAYS)) {
+            throw ScheduleException.badRequest("daysBefore는 0부터 " + MAX_REMIND_DAYS + "까지예요.");
+        }
+        Event event = repository.findByIdAndUserId(eventId.strip(), user)
+                .orElseThrow(() -> ScheduleException.notFound("그 일정을 찾지 못했어요."));
+        event.setReminder(on, days);
+        return EventView.of(event, zone);
     }
 
     @Transactional

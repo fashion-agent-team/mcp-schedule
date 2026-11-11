@@ -63,6 +63,7 @@ agent는 이 값을 보고 그날 어떤 옷이 맞는지 정합니다. 이 서�
 | `schedule_list` | 날짜별 일정 보기 | 읽기 전용 |
 | `schedule_delete` | 일정 하나 삭제 | 지우는 도구(`destructiveHint`) |
 | `schedule_briefing` | 오늘 일정 + 3일 안 중요한 일정을 읽어 줄 문장으로 | 읽기 전용 |
+| `schedule_set_reminder` | 일정의 폰 알림 받기·며칠 전에 미리 알릴지 | 쓰기, 같은 값이면 같은 결과(`idempotentHint`) |
 
 `userId`는 모든 도구에 들어가며, agent가 Gateway에서 받은 `X-User-Id` 값으로 덮어써서 넣습니다. UUID여야 합니다.
 
@@ -123,6 +124,18 @@ agent는 이 값을 보고 그날 어떤 옷이 맞는지 정합니다. 이 서�
 
 입력: `userId`, `eventId`(`schedule_list` 결과의 값). 출력: `{"deleted": true}`.
 "토요일 결혼식 지워 줘"처럼 말하면 agent가 먼저 `schedule_list`로 `eventId`를 찾은 뒤 부릅니다. 다른 사람의 일정은 지울 수 없습니다(`not_found`).
+
+### `schedule_set_reminder`
+
+일정을 넣은 뒤 agent가 "일정 전에 알림을 드릴까요?" → (응) "며칠 전에 미리 알려 드릴까요?"를 묻고 답으로 부릅니다(2026-11-11 진행 님).
+
+입력: `userId`, `eventId`, `remind`(비우면 true), `daysBefore`(0~14, 비우면 1). 출력: 그 일정(`schedule_list`의 한 건 모양).
+
+- `remind=false`: 알림 없음. `remindDaysBefore`는 null이 됩니다.
+- `daysBefore=N`: N일 전 저녁 8시에 미리 알리고, 당일 아침에도 알립니다. 0이면 당일 아침만.
+- 묻기 전에 넣은 일정은 `remind=true`, `remindDaysBefore=null`(전날 저녁 + 당일 아침)입니다.
+
+알림은 앱이 폰 안에서 예약합니다(원격 푸시는 유료 Apple 계정이 필요해서). 앱은 `GET /api/v1/schedules?date=…&endDate=…`(둘 다 포함, 최대 31일)로 여러 날을 한 번에 받아 이 값대로 예약합니다.
 
 ### `schedule_briefing`
 
