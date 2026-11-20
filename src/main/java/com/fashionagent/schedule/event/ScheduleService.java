@@ -10,6 +10,8 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
@@ -141,12 +143,17 @@ public class ScheduleService {
      * @param spoken 그대로 읽어 줄 문장
      * @param today 오늘 일정(시작 순)
      * @param upcoming 내일부터 3일 뒤까지의 격식 일정(면접·결혼식·장례식 등, 시작 순)
+     * @param reminded 오늘이 미리 알릴 날인 며칠 뒤 일정(remindDaysBefore일 전이 오늘, 정하지 않았으면 전날, 시작 순).
+     *                 upcoming에 이미 있는 일정은 넣지 않습니다.
      */
-    public record Briefing(String spoken, List<EventView> today, List<EventView> upcoming) {
+    public record Briefing(String spoken, List<EventView> today, List<EventView> upcoming, List<EventView> reminded) {
     }
 
     /**
-     * 오늘 일정과 3일 안에 있는 중요한(격식) 일정을 한 번에 읽어 줄 문장으로 만듭니다. 읽기만 하고 알림 기록은 바꾸지 않습니다.
+     * 오늘 일정, 오늘 미리 알려 달라고 한 며칠 뒤 일정, 3일 안에 있는 중요한(격식) 일정을 한 번에 읽어 줄 문장으로 만듭니다.
+     * 읽기만 하고 알림 기록은 바꾸지 않습니다.
+     * <p>"29일 저녁 8시 일정을 3일 전에 알려 줘"라고 했으면 26일 아침 인사에서 "3일 뒤 … 오후 8시에 … 일정이 있어요"라고 말합니다
+     * (2026-11-20 정지원: 며칠 전 알림은 그날 저녁이 아니라 아침 인사로).
      * <p>예: "오늘은 오후 7시에 친구랑 저녁 일정이 있어요. 모레 11월 13일 금요일 오후 2시에 면접 일정이 있어요. 입을 옷은 세탁소에 맡기셨어요? …"
      */
     @Transactional(readOnly = true)
@@ -159,6 +166,10 @@ public class ScheduleService {
                 user, day.plusDays(1).atStartOfDay(zone).toInstant(),
                 day.plusDays(DryCleaningAdvice.REMIND_DAYS_BEFORE + 1L).atStartOfDay(zone).toInstant())
                 .stream().filter(e -> DryCleaningAdvice.applies(e.getOccasion())).toList();
+        List<Event> reminded = repository.findByUserIdAndStartAtGreaterThanEqualAndStartAtLessThanOrderByStartAtAsc(
+                user, day.plusDays(1).atStartOfDay(zone).toInstant(),
+                day.plusDays(MAX_REMIND_DAYS + 1L).atStartOfDay(zone).toInstant())
+                .stream().filter(e -> remindsOn(e, day) && soon.stream().noneMatch(f -> f.getId().equals(e.getId()))).toList();
 
         StringBuilder spoken = new StringBuilder();
         if (todays.isEmpty()) {
@@ -169,7 +180,10 @@ public class ScheduleService {
             spoken.append("오늘 일정은 ").append(todays.size()).append("개예요. ");
             spoken.append(String.join(", ", todays.stream().map(this::oneLine).toList())).append(".");
         }
-        for (Event e : soon) {
+        List<Event> ahead = new ArrayList<>(reminded);
+        ahead.addAll(soon);
+        ahead.sort(Comparator.comparing(Event::getStartAt));
+        for (Event e : ahead) {
             spoken.append(" ").append(DryCleaningAdvice.upcoming(e.getTitle(), day, e.getStartAt().atZone(zone)));
         }
         if (!soon.isEmpty()) {
@@ -177,7 +191,17 @@ public class ScheduleService {
         }
         return new Briefing(spoken.toString(),
                 todays.stream().map(e -> EventView.of(e, zone)).toList(),
-                soon.stream().map(e -> EventView.of(e, zone)).toList());
+                soon.stream().map(e -> EventView.of(e, zone)).toList(),
+                reminded.stream().map(e -> EventView.of(e, zone)).toList());
+    }
+
+    /** e를 day에 미리 알리는지. 알림을 켰고 remindDaysBefore(정하지 않았으면 1)일 전이 day면 true. 0이면 당일만이라 false. */
+    boolean remindsOn(Event e, LocalDate day) {
+        if (!e.isRemind()) {
+            return false;
+        }
+        int before = e.getRemindDaysBefore() == null ? 1 : e.getRemindDaysBefore();
+        return before > 0 && DryCleaningAdvice.daysUntil(day, e.getStartAt().atZone(zone)) == before;
     }
 
     /** "오후 2시에 더채플앳청담에서 친구 결혼식" */
@@ -193,10 +217,20 @@ public class ScheduleService {
      * 일정 알림 설정. 일정을 넣은 뒤 agent가 "일정 전에 알림을 드릴까요?", "며칠 전에 미리 알려 드릴까요?"를 묻고 부릅니다.
      *
      * @param remind false면 알림 없음
-     * @param daysBefore 며칠 전 저녁에 미리 알릴지(0이면 당일 아침만). remind가 true인데 비면 1(전날)
+     * @param daysBefore 며칠 전 아침에 미리 알릴지(0이면 당일 아침만). remind가 true인데 비면 1(전날)
      */
     @Transactional
     public EventView setReminder(String userId, String eventId, Boolean remind, Integer daysBefore) {
+        return setReminder(userId, eventId, remind, daysBefore, null);
+    }
+
+    /**
+     * 알림 설정에 시각까지. "약속 2일 전 오후 4시에 알려 줘"면 daysBefore=2, time="16:00"(2026-11-20 정지원).
+     *
+     * @param time 미리 알림 시각 "HH:mm"(24시간, 서울). 비우면 아침 8시. daysBefore가 0이면 당일 알림 시각
+     */
+    @Transactional
+    public EventView setReminder(String userId, String eventId, Boolean remind, Integer daysBefore, String time) {
         UUID user = parseUserId(userId);
         if (eventId == null || eventId.isBlank()) {
             throw ScheduleException.badRequest("eventId가 비어 있어요.");
@@ -206,10 +240,27 @@ public class ScheduleService {
         if (days != null && (days < 0 || days > MAX_REMIND_DAYS)) {
             throw ScheduleException.badRequest("daysBefore는 0부터 " + MAX_REMIND_DAYS + "까지예요.");
         }
+        LocalTime at = parseRemindTime(time);
         Event event = repository.findByIdAndUserId(eventId.strip(), user)
                 .orElseThrow(() -> ScheduleException.notFound("그 일정을 찾지 못했어요."));
-        event.setReminder(on, days);
+        event.setReminder(on, days, at);
         return EventView.of(event, zone);
+    }
+
+    /** "16:00", "9:30", "16:00:00" → 시각. 비면 null. 분은 그대로 둡니다. */
+    static LocalTime parseRemindTime(String time) {
+        if (time == null || time.isBlank()) {
+            return null;
+        }
+        String t = time.strip();
+        if (t.matches("\\d:\\d{2}(:\\d{2})?")) {
+            t = "0" + t;
+        }
+        try {
+            return LocalTime.parse(t).withSecond(0).withNano(0);
+        } catch (DateTimeParseException e) {
+            throw ScheduleException.badRequest("time은 \"16:00\"처럼 24시간 HH:mm으로 주세요.");
+        }
     }
 
     @Transactional

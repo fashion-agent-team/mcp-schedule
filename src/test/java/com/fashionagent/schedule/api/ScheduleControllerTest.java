@@ -43,7 +43,7 @@ class ScheduleControllerTest {
     final String userId = UUID.randomUUID().toString();
 
     static EventView event(String title, String start, String place, String category, Occasion occasion) {
-        return new EventView("e_" + title.hashCode(), title, start, place, category, occasion, true, null);
+        return new EventView("e_" + title.hashCode(), title, start, place, category, occasion, true, null, null);
     }
 
     ResultActions list(String user, String date) throws Exception {
@@ -147,7 +147,8 @@ class ScheduleControllerTest {
         // given
         given(service.briefing(userId)).willReturn(new ScheduleService.Briefing("오늘은 오후 12시 30분에 친구랑 점심 일정이 있어요.",
                 List.of(event("친구랑 점심", "2026-11-01T12:30:00+09:00", null, null, Occasion.casual)),
-                List.of(event("면접", "2026-11-03T14:00:00+09:00", null, null, Occasion.formal))));
+                List.of(event("면접", "2026-11-03T14:00:00+09:00", null, null, Occasion.formal)),
+                List.of()));
 
         // when
         ResultActions result = mvc.perform(get("/api/v1/schedules/briefing").header("X-User-Id", userId));

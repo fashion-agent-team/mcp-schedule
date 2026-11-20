@@ -116,10 +116,10 @@ class ScheduleToolsTest {
     @DisplayName("schedule_set_reminder Given 없는 일정 When 부르면 Then isError=true, not_found를 돌려준다")
     void setReminderNotFound() {
         // given
-        given(service.setReminder(USER, "e_x", true, 1)).willThrow(ScheduleException.notFound("일정을 찾지 못했어요."));
+        given(service.setReminder(USER, "e_x", true, 1, null)).willThrow(ScheduleException.notFound("일정을 찾지 못했어요."));
 
         // when
-        CallToolResult result = tools.scheduleSetReminder(USER, "e_x", true, 1);
+        CallToolResult result = tools.scheduleSetReminder(USER, "e_x", true, 1, null);
 
         // then
         assertThat(result.isError()).isTrue();

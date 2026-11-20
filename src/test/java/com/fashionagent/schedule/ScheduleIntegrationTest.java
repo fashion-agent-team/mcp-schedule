@@ -123,6 +123,9 @@ class ScheduleIntegrationTest {
     record ReminderArgs(String userId, String eventId, Boolean remind, Integer daysBefore) {
     }
 
+    record ReminderTimeArgs(String userId, String eventId, Boolean remind, Integer daysBefore, String time) {
+    }
+
     record UserArgs(String userId) {
     }
 
@@ -333,6 +336,33 @@ class ScheduleIntegrationTest {
         assertThat(events.get(0).path("remind").asBoolean()).isFalse();
         assertThat(events.get(1).path("remindDaysBefore").asInt()).isEqualTo(3);
         assertThat(tooLong.statusCode()).isEqualTo(400);
+    }
+
+    @Test
+    @DisplayName("Given 29일 오후 8시 일정 When \"2일 전 오후 4시에 알려 줘\"로 알림을 정하면 "
+            + "Then remindTime 16:00이 저장되고, 시각을 비우면 null(아침 8시), 잘못된 시각은 거부")
+    void 알림_시각을_정한다() throws Exception {
+        // given
+        String party = call("schedule_add", new AddArgs(userId, "친구 모임", "2026-11-29T20:00:00+09:00", null))
+                .path("eventId").asString();
+
+        // when
+        JsonNode at4 = call("schedule_set_reminder", new ReminderTimeArgs(userId, party, true, 2, "16:00"));
+        HttpResponse<String> listed = rest("/api/v1/schedules?date=2026-11-29", userId);
+        JsonNode shortHour = call("schedule_set_reminder", new ReminderTimeArgs(userId, party, true, 1, "9:30"));
+        McpSchema.CallToolResult bad = callRaw("schedule_set_reminder",
+                new ReminderTimeArgs(userId, party, true, 2, "오후 4시"));
+        JsonNode noTime = call("schedule_set_reminder", new ReminderArgs(userId, party, true, 3));
+        JsonNode off = call("schedule_set_reminder", new ReminderTimeArgs(userId, party, false, null, "16:00"));
+
+        // then
+        assertThat(at4.path("remindDaysBefore").asInt()).isEqualTo(2);
+        assertThat(at4.path("remindTime").asString()).isEqualTo("16:00");
+        assertThat(json.readTree(listed.body()).path("events").get(0).path("remindTime").asString()).isEqualTo("16:00");
+        assertThat(shortHour.path("remindTime").asString()).isEqualTo("09:30");
+        assertThat(bad.isError()).isTrue();
+        assertThat(noTime.path("remindTime").isNull()).isTrue();
+        assertThat(off.path("remindTime").isNull()).isTrue();
     }
 
     @Test
