@@ -7,9 +7,11 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,9 +26,13 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.jdbc.core.simple.JdbcClient;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fashionagent.schedule.event.Event;
 import com.fashionagent.schedule.event.EventRepository;
+import com.fashionagent.schedule.notify.MorningReminder;
+import com.fashionagent.schedule.notify.Notifier;
 import com.fashionagent.schedule.place.PlaceInfo;
 import com.fashionagent.schedule.place.PlaceLookup;
 
@@ -46,7 +52,8 @@ import tools.jackson.databind.ObjectMapper;
  * 시나리오 번호는 앱 레포 specs/002-schedule/spec.md의 Acceptance Scenarios입니다.
  */
 @EnabledIf("com.fashionagent.schedule.TestDatabase#available")
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = { "schedule.reminder.cron=-", "schedule.care-reminder.cron=-" })
 class ScheduleIntegrationTest {
 
     @TestConfiguration
@@ -59,13 +66,41 @@ class ScheduleIntegrationTest {
                     : Optional.empty();
         }
 
+        /** 알림을 실제로 보내는 대신 기록합니다. fail이 true면 보내기 실패로 답합니다. */
+        @Bean
+        @Primary
+        RecordingNotifier recordingNotifier() {
+            return new RecordingNotifier();
+        }
+
         /** 오늘을 2026-11-01(한국 시각)로 고정합니다. */
         @Bean
         @Primary
         MutableClock testClock() {
-            return new MutableClock(Instant.parse("2026-11-01T09:00:00+09:00"));
+            return new MutableClock(DEFAULT_NOW);
         }
     }
+
+    static class RecordingNotifier implements Notifier {
+        final List<String> today = new CopyOnWriteArrayList<>();
+        volatile boolean fail;
+
+        @Override
+        public boolean notifyToday(Event event, String message) {
+            if (fail) {
+                return false;
+            }
+            today.add(message);
+            return true;
+        }
+
+        @Override
+        public boolean notifyBefore(Event event, String message) {
+            return !fail;
+        }
+    }
+
+    static final Instant DEFAULT_NOW = Instant.parse("2026-11-01T09:00:00+09:00");
 
     @DynamicPropertySource
     static void db(DynamicPropertyRegistry r) {
@@ -97,6 +132,18 @@ class ScheduleIntegrationTest {
     @Autowired
     EventRepository repository;
 
+    @Autowired
+    MorningReminder morning;
+
+    @Autowired
+    RecordingNotifier notifier;
+
+    @Autowired
+    MutableClock clock;
+
+    @Autowired
+    JdbcClient jdbc;
+
     private final ObjectMapper json = new ObjectMapper();
     private final HttpClient http = HttpClient.newHttpClient();
     private McpSyncClient client;
@@ -113,6 +160,9 @@ class ScheduleIntegrationTest {
     void close() {
         client.closeGracefully();
         repository.deleteAll();
+        clock.set(DEFAULT_NOW);
+        notifier.today.clear();
+        notifier.fail = false;
     }
 
     private McpSchema.CallToolResult callRaw(String tool, Object args) {
@@ -316,5 +366,83 @@ class ScheduleIntegrationTest {
         assertThat(r.isError()).isTrue();
         assertThat(errorCode(r)).isEqualTo("bad_request");
         assertThat(r.structuredContent()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("US4-1 Given 오늘 일정이 있는 사용자 When 아침 8시가 되면 Then 알림이 한 번 가고 보낸 시각이 기록된다")
+    void 오늘_일정은_아침에_한_번_알린다() {
+        // given
+        clock.set(Instant.parse("2026-11-01T07:00:00+09:00"));
+        call("schedule_add", new AddArgs(userId, "친구 결혼식", "2026-11-01T14:00:00+09:00", "더채플앳청담"));
+        clock.set(Instant.parse("2026-11-01T08:00:00+09:00"));
+
+        // when
+        morning.sendTodayReminders();
+
+        // then
+        assertThat(notifier.today).containsExactly("오늘 오후 2시에 더채플앳청담에서 친구 결혼식 일정이 있어요. 옷 추천을 받아 보세요.");
+        assertThat(repository.findAll()).allSatisfy(e -> assertThat(e.getNotifiedAt()).isNotNull());
+    }
+
+    @Test
+    @DisplayName("US4-2 Given 알림 작업이 같은 날 두 번 돌아감 When 다시 실행되면 Then 이미 보낸 일정은 다시 보내지 않는다")
+    void 같은_날_두_번_돌아도_한_번만() {
+        // given
+        clock.set(Instant.parse("2026-11-01T07:00:00+09:00"));
+        call("schedule_add", new AddArgs(userId, "친구랑 점심", "2026-11-01T12:30:00+09:00", null));
+        clock.set(Instant.parse("2026-11-01T08:00:00+09:00"));
+        morning.sendTodayReminders();
+
+        // when
+        morning.sendTodayReminders();
+
+        // then
+        assertThat(notifier.today).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("US4-3 Given 오늘 8시 이후에 등록한 오늘 일정 When 알림 작업이 돌면 Then 아침 알림은 보내지 않는다")
+    void 아침_이후에_등록한_오늘_일정은_알리지_않는다() {
+        // given (기본 시계: 2026-11-01 오전 9시)
+        call("schedule_add", new AddArgs(userId, "친구랑 저녁", "2026-11-01T19:00:00+09:00", null));
+
+        // when
+        morning.sendTodayReminders();
+
+        // then
+        assertThat(notifier.today).isEmpty();
+    }
+
+    @Test
+    @DisplayName("US4-4 Given 알림 전송 실패 When 실패하면 Then 보낸 것으로 기록하지 않고 다음에 다시 시도한다")
+    void 보내기에_실패하면_기록하지_않는다() {
+        // given
+        clock.set(Instant.parse("2026-11-01T07:00:00+09:00"));
+        call("schedule_add", new AddArgs(userId, "면접", "2026-11-01T14:00:00+09:00", null));
+        clock.set(Instant.parse("2026-11-01T08:00:00+09:00"));
+        notifier.fail = true;
+
+        // when
+        morning.sendTodayReminders();
+        notifier.fail = false;
+        morning.sendTodayReminders();
+
+        // then
+        assertThat(notifier.today).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("005 US1-2 Given Flyway가 schedule 스키마를 만듦 When 외래 키를 보면 Then 다른 스키마를 가리키는 FK는 0개")
+    void schedule_스키마는_다른_스키마로_FK가_없다() {
+        // when
+        Long crossSchema = jdbc.sql("""
+                SELECT count(*) FROM pg_constraint c
+                JOIN pg_namespace n ON n.oid = c.connamespace
+                JOIN pg_class ref ON ref.oid = c.confrelid
+                WHERE c.contype = 'f' AND n.nspname = 'schedule' AND ref.relnamespace <> c.connamespace""")
+                .query(Long.class).single();
+
+        // then
+        assertThat(crossSchema).isZero();
     }
 }

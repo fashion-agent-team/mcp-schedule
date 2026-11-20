@@ -5,6 +5,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -36,6 +37,8 @@ public class ScheduleService {
     private final OccasionClassifier classifier;
     private final ZoneId zone;
     private final Clock clock;
+    /** MorningReminder가 도는 시각(schedule.reminder.cron 기본값 0 0 8 * * *). */
+    public static final LocalTime MORNING_REMINDER_TIME = LocalTime.of(8, 0);
 
     public ScheduleService(EventRepository repository, PlaceLookup placeLookup, PlaceRepository places,
             OccasionClassifier classifier, @Value("${schedule.zone:Asia/Seoul}") String zone, Clock clock) {
@@ -77,6 +80,11 @@ public class ScheduleService {
         if (DryCleaningAdvice.applies(occasion.occasion())
                 && DryCleaningAdvice.daysUntil(today, startAt) <= DryCleaningAdvice.REMIND_DAYS_BEFORE) {
             event.markCareReminded(Instant.now(clock));
+        }
+        // spec 002 US4-3: 아침 알림 시각이 지난 뒤 등록한 오늘 일정은 아침 알림을 보내지 않습니다(등록할 때 이미 확인 문장을 들음).
+        if (startAt.withZoneSameInstant(zone).toLocalDate().equals(today)
+                && !LocalTime.now(clock.withZone(zone)).isBefore(MORNING_REMINDER_TIME)) {
+            event.markNotified(Instant.now(clock));
         }
         repository.save(event);
 
