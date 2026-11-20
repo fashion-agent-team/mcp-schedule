@@ -87,16 +87,20 @@ public class ScheduleTools {
 
     @McpTool(name = "schedule_set_reminder",
             description = "일정의 폰 알림을 정합니다. 일정을 넣은 뒤 \"일정 전에 알림을 드릴까요?\", \"며칠 전에 미리 알려 드릴까요?\"에 "
-                    + "사용자가 답하면 부릅니다. remind=false면 알림 없음, daysBefore는 며칠 전 아침 8시에 미리 알릴지(0이면 당일 아침만, 최대 14). "
-                    + "알림을 받으면 당일 아침에도 한 번 더 알립니다.",
+                    + "사용자가 답하면 부릅니다. remind=false면 알림 없음, daysBefore는 며칠 전에 미리 알릴지(0이면 당일만, 최대 14). "
+                    + "time은 그 알림을 몇 시에 띄울지 24시간 \"HH:mm\"(비우면 아침 8시). "
+                    + "예: \"2일 전 오후 4시에 알려 줘\" → daysBefore=2, time=\"16:00\". \"전날 저녁 9시\" → daysBefore=1, time=\"21:00\". "
+                    + "\"당일 오후 1시\" → daysBefore=0, time=\"13:00\". 시각을 말하지 않았으면 time은 비웁니다. "
+                    + "며칠 전 알림을 받으면 당일 아침에도 한 번 더 알립니다.",
             annotations = @McpAnnotations(title = "일정 알림 설정", readOnlyHint = false, destructiveHint = false,
                     idempotentHint = true, openWorldHint = false))
     public CallToolResult scheduleSetReminder(
             @McpToolParam(description = "사용자 id(UUID). agent가 채웁니다.", required = true) String userId,
             @McpToolParam(description = "일정의 eventId (schedule_add·schedule_list 결과)", required = true) String eventId,
             @McpToolParam(description = "알림을 받을지. 비우면 true", required = false) Boolean remind,
-            @McpToolParam(description = "며칠 전 아침에 미리 알릴지 0~14. 비우면 1(전날)", required = false) Integer daysBefore) {
-        return run(() -> service.setReminder(userId, eventId, remind, daysBefore));
+            @McpToolParam(description = "며칠 전에 미리 알릴지 0~14. 비우면 1(전날)", required = false) Integer daysBefore,
+            @McpToolParam(description = "알림 시각 24시간 HH:mm(예: \"16:00\"). 비우면 아침 8시", required = false) String time) {
+        return run(() -> service.setReminder(userId, eventId, remind, daysBefore, time));
     }
 
     @McpTool(name = "schedule_delete",

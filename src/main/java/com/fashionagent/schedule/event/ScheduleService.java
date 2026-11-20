@@ -221,6 +221,16 @@ public class ScheduleService {
      */
     @Transactional
     public EventView setReminder(String userId, String eventId, Boolean remind, Integer daysBefore) {
+        return setReminder(userId, eventId, remind, daysBefore, null);
+    }
+
+    /**
+     * 알림 설정에 시각까지. "약속 2일 전 오후 4시에 알려 줘"면 daysBefore=2, time="16:00"(2026-11-20 정지원).
+     *
+     * @param time 미리 알림 시각 "HH:mm"(24시간, 서울). 비우면 아침 8시. daysBefore가 0이면 당일 알림 시각
+     */
+    @Transactional
+    public EventView setReminder(String userId, String eventId, Boolean remind, Integer daysBefore, String time) {
         UUID user = parseUserId(userId);
         if (eventId == null || eventId.isBlank()) {
             throw ScheduleException.badRequest("eventId가 비어 있어요.");
@@ -230,10 +240,27 @@ public class ScheduleService {
         if (days != null && (days < 0 || days > MAX_REMIND_DAYS)) {
             throw ScheduleException.badRequest("daysBefore는 0부터 " + MAX_REMIND_DAYS + "까지예요.");
         }
+        LocalTime at = parseRemindTime(time);
         Event event = repository.findByIdAndUserId(eventId.strip(), user)
                 .orElseThrow(() -> ScheduleException.notFound("그 일정을 찾지 못했어요."));
-        event.setReminder(on, days);
+        event.setReminder(on, days, at);
         return EventView.of(event, zone);
+    }
+
+    /** "16:00", "9:30", "16:00:00" → 시각. 비면 null. 분은 그대로 둡니다. */
+    static LocalTime parseRemindTime(String time) {
+        if (time == null || time.isBlank()) {
+            return null;
+        }
+        String t = time.strip();
+        if (t.matches("\\d:\\d{2}(:\\d{2})?")) {
+            t = "0" + t;
+        }
+        try {
+            return LocalTime.parse(t).withSecond(0).withNano(0);
+        } catch (DateTimeParseException e) {
+            throw ScheduleException.badRequest("time은 \"16:00\"처럼 24시간 HH:mm으로 주세요.");
+        }
     }
 
     @Transactional

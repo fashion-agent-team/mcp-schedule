@@ -8,6 +8,7 @@ import java.time.format.DateTimeFormatter;
  *
  * @param remind 폰 알림을 받을지
  * @param remindDaysBefore 며칠 전 아침 8시에 미리 알릴지(0이면 당일 아침만). null이면 아직 안 정함(전날 + 당일)
+ * @param remindTime 미리 알림 시각 "16:00"(서울). null이면 아침 8시. remindDaysBefore가 0이면 당일 알림 시각
  */
 public record EventView(
         String eventId,
@@ -17,9 +18,12 @@ public record EventView(
         String placeCategory,
         Occasion occasion,
         boolean remind,
-        Integer remindDaysBefore) {
+        Integer remindDaysBefore,
+        String remindTime) {
 
     /** 약속 문서 1절: 2026-11-20T14:00:00+09:00 (초까지, 시간대 포함) */
+    private static final DateTimeFormatter HH_MM = DateTimeFormatter.ofPattern("HH:mm");
+
     private static final DateTimeFormatter START = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
 
     public static EventView of(Event e, ZoneId zone) {
@@ -31,6 +35,7 @@ public record EventView(
                 e.getPlaceCategory(),
                 e.getOccasion(),
                 e.isRemind(),
-                e.getRemindDaysBefore());
+                e.getRemindDaysBefore(),
+                e.getRemindTime() == null ? null : HH_MM.format(e.getRemindTime()));
     }
 }

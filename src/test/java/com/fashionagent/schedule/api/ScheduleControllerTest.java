@@ -43,7 +43,7 @@ class ScheduleControllerTest {
     final String userId = UUID.randomUUID().toString();
 
     static EventView event(String title, String start, String place, String category, Occasion occasion) {
-        return new EventView("e_" + title.hashCode(), title, start, place, category, occasion, true, null);
+        return new EventView("e_" + title.hashCode(), title, start, place, category, occasion, true, null, null);
     }
 
     ResultActions list(String user, String date) throws Exception {

@@ -1,6 +1,7 @@
 package com.fashionagent.schedule.event;
 
 import java.time.Instant;
+import java.time.LocalTime;
 import java.util.UUID;
 
 import jakarta.persistence.Column;
@@ -71,6 +72,10 @@ public class Event {
     @Column(name = "remind_days_before")
     private Integer remindDaysBefore;
 
+    /** 미리 알림을 띄울 시각(서울). null이면 아침 8시. remindDaysBefore가 0이면 당일 알림 시각. */
+    @Column(name = "remind_time")
+    private LocalTime remindTime;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -111,9 +116,10 @@ public class Event {
         this.careRemindedAt = at;
     }
 
-    public void setReminder(boolean remind, Integer daysBefore) {
+    public void setReminder(boolean remind, Integer daysBefore, LocalTime time) {
         this.remind = remind;
         this.remindDaysBefore = remind ? daysBefore : null;
+        this.remindTime = remind ? time : null;
     }
 
     public String getId() { return id; }
@@ -130,4 +136,5 @@ public class Event {
     public Instant getCareRemindedAt() { return careRemindedAt; }
     public boolean isRemind() { return remind; }
     public Integer getRemindDaysBefore() { return remindDaysBefore; }
+    public LocalTime getRemindTime() { return remindTime; }
 }
