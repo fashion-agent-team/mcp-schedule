@@ -18,8 +18,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.fashionagent.schedule.common.KoreanText;
 import com.fashionagent.schedule.common.ScheduleException;
+import com.fashionagent.schedule.place.Place;
 import com.fashionagent.schedule.place.PlaceInfo;
 import com.fashionagent.schedule.place.PlaceLookup;
+import com.fashionagent.schedule.place.PlaceRepository;
 
 /** 일정 추가·조회·삭제. MCP 도구와 REST가 함께 씁니다. */
 @Service
@@ -30,14 +32,16 @@ public class ScheduleService {
 
     private final EventRepository repository;
     private final PlaceLookup placeLookup;
+    private final PlaceRepository places;
     private final OccasionClassifier classifier;
     private final ZoneId zone;
     private final Clock clock;
 
-    public ScheduleService(EventRepository repository, PlaceLookup placeLookup,
+    public ScheduleService(EventRepository repository, PlaceLookup placeLookup, PlaceRepository places,
             OccasionClassifier classifier, @Value("${schedule.zone:Asia/Seoul}") String zone, Clock clock) {
         this.repository = repository;
         this.placeLookup = placeLookup;
+        this.places = places;
         this.classifier = classifier;
         this.zone = ZoneId.of(zone);
         this.clock = clock;
@@ -65,7 +69,7 @@ public class ScheduleService {
         OccasionClassifier.Result occasion = classifier.classify(cleanTitle, info == null ? null : info.categoryName());
 
         Event event = new Event(newId(), user, cleanTitle, startAt.toInstant(), cleanPlace,
-                info == null ? null : info.id(), placeCategory, occasion.occasion(), occasion.source());
+                info == null ? null : savePlace(info), occasion.occasion(), occasion.source());
 
         // 격식 자리면 드라이클리닝 안내. 이미 3일 안쪽이면 지금 말한 것으로 끝내고 3일 전 알림은 보내지 않습니다.
         LocalDate today = today();
@@ -81,6 +85,17 @@ public class ScheduleService {
             spoken = spoken + " " + careTip;
         }
         return new AddResult(event.getId(), occasion.occasion(), placeCategory, spoken, careTip);
+    }
+
+    /** 카카오 장소를 places에 한 번만 둡니다. 이미 있으면 이름·분류만 맞춥니다. */
+    private Place savePlace(PlaceInfo info) {
+        Place place = places.findById(info.id()).orElse(null);
+        if (place == null) {
+            String name = info.name() == null || info.name().isBlank() ? info.id() : info.name();
+            return places.save(new Place(info.id(), name, info.category()));
+        }
+        place.refresh(info.name(), info.category());
+        return place;
     }
 
     @Transactional(readOnly = true)

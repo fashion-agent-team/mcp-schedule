@@ -8,13 +8,18 @@ import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
-/** schedule 스키마의 events 테이블. 테이블은 Flyway(V1__init.sql)가 만들고, 설계는 프로젝트 DB 문서(db/schema.sql)를 따릅니다. */
+import com.fashionagent.schedule.place.Place;
+
+/** schedule 스키마의 events 테이블. 테이블은 Flyway(V1~V4)가 만들고, 설계는 프로젝트 DB 문서(db/schema.sql)를 따릅니다. */
 @Entity
 @Table(name = "events", indexes = @Index(name = "idx_events_user_start", columnList = "user_id, start_at"))
 public class Event {
@@ -36,13 +41,10 @@ public class Event {
     @Column(length = 200)
     private String place;
 
-    /** 카카오 로컬 검색 결과 id. 못 찾으면 null */
-    @Column(name = "kakao_place_id", length = 20)
-    private String kakaoPlaceId;
-
-    /** 카카오 로컬에서 찾은 장소 분류의 마지막 마디. 예: "예식장" */
-    @Column(name = "place_category", length = 100)
-    private String placeCategory;
+    /** 카카오 로컬에서 찾은 장소(kakao_place_id → places). 못 찾으면 null. 분류는 places에 있습니다(V4, 3NF). */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "kakao_place_id")
+    private Place kakaoPlace;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -79,14 +81,13 @@ public class Event {
     }
 
     public Event(String id, UUID userId, String title, Instant startAt, String place,
-            String kakaoPlaceId, String placeCategory, Occasion occasion, OccasionSource occasionSource) {
+            Place kakaoPlace, Occasion occasion, OccasionSource occasionSource) {
         this.id = id;
         this.userId = userId;
         this.title = title;
         this.startAt = startAt;
         this.place = place;
-        this.kakaoPlaceId = kakaoPlaceId;
-        this.placeCategory = placeCategory;
+        this.kakaoPlace = kakaoPlace;
         this.occasion = occasion;
         this.occasionSource = occasionSource;
     }
@@ -120,8 +121,9 @@ public class Event {
     public String getTitle() { return title; }
     public Instant getStartAt() { return startAt; }
     public String getPlace() { return place; }
-    public String getKakaoPlaceId() { return kakaoPlaceId; }
-    public String getPlaceCategory() { return placeCategory; }
+    public Place getKakaoPlace() { return kakaoPlace; }
+    public String getKakaoPlaceId() { return kakaoPlace == null ? null : kakaoPlace.getId(); }
+    public String getPlaceCategory() { return kakaoPlace == null ? null : kakaoPlace.getCategory(); }
     public OccasionSource getOccasionSource() { return occasionSource; }
     public Occasion getOccasion() { return occasion; }
     public Instant getNotifiedAt() { return notifiedAt; }
