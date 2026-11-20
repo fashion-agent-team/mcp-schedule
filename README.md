@@ -350,11 +350,18 @@ npx @modelcontextprotocol/inspector
 ./gradlew test
 ```
 
-외부 서비스 없이 돕니다(메모리 DB, 카카오는 가짜 서버). PR과 `develop`·`main` 푸시마다 GitHub Actions(`.github/workflows/ci.yml`)가 같은 테스트를 돌립니다.
+테스트는 세 종류이고, 이름의 시나리오 번호(예: `US1-3`)는 앱 레포 `specs/002-schedule/spec.md`의 Given/When/Then입니다. 본문도 `// given // when // then`으로 나눴습니다.
+
+- **컨트롤러 슬라이스 테스트**: `@WebMvcTest`로 컨트롤러만 띄우고 `ScheduleService`는 `@MockitoBean`. X-User-Id·쿼리 받기, 응답 모양, 오류 모양만 봅니다.
+- **통합 테스트**: 서버 전체 + 진짜 PostgreSQL(Testcontainers `postgres:17`). 카카오와 오늘 날짜만 가짜입니다. Docker가 없으면 `TEST_DB_URL=jdbc:postgresql://localhost:5432/fashion`(`TEST_DB_USER`, `TEST_DB_PASSWORD`)으로 있는 DB에 붙고, 둘 다 없으면 이 테스트만 건너뜁니다.
+- **단위 테스트**: 나머지. 스프링 없이 클래스 하나씩.
+
+PR과 `develop`·`main` 푸시마다 GitHub Actions(`.github/workflows/ci.yml`)가 같은 테스트를 돌립니다(러너에 Docker가 있어 통합 테스트도 돕니다).
 
 | 테스트 | 확인하는 것 |
 | --- | --- |
-| `McpToolsIntegrationTest` | MCP 클라이언트로 서버에 붙어 도구 4개가 보이는지, 추가→조회→삭제, 브리핑 도구와 REST가 같은지, 장소 없는 일정·시간대 없는 시각, 잘못된 입력의 오류 모양 |
+| `api/ScheduleControllerTest` (슬라이스) | US3-1~3: 조회 응답 모양, 빈 목록, 헤더의 사용자 id로만 조회, X-User-Id 없으면 401, 여러 날 조회, 서비스 오류를 `{error:{code,message}}`로, 브리핑 |
+| `ScheduleIntegrationTest` (통합, PostgreSQL) | 도구 5개, US1-1~3 등록(확인 문장·장소 분위기·제목 없음 거부), US3 내 일정만 시간 순서(도구 = REST), US5 삭제(남의 일정 not_found), 알림 설정·여러 날, 브리핑 도구 = REST, 잘못된 입력 |
 | `OccasionClassifierTest` | 제목 키워드 판단, 제목 우선·장소 보강, `occasion_source` 기록, 한 글자 키워드 처리 |
 | `KakaoLocalClientTest` | 카카오 응답에서 장소 종류 읽기, 실패하면 빈 값, 키가 없으면 부르지 않음 |
 | `KoreanTextTest` | "을/를" 붙이기, 읽어 줄 날짜·시각 문장 |
