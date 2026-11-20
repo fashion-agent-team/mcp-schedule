@@ -67,7 +67,7 @@ public class Event {
     @Column(nullable = false)
     private boolean remind = true;
 
-    /** 며칠 전 저녁 8시에 미리 알릴지(0이면 당일 아침에만). null이면 아직 안 정함: 전날 저녁 + 당일 아침. */
+    /** 며칠 전 아침 8시에 미리 알릴지(0이면 당일 아침에만). null이면 아직 안 정함: 전날 아침 + 당일 아침. */
     @Column(name = "remind_days_before")
     private Integer remindDaysBefore;
 

@@ -132,8 +132,8 @@ agent는 이 값을 보고 그날 어떤 옷이 맞는지 정합니다. 이 서�
 입력: `userId`, `eventId`, `remind`(비우면 true), `daysBefore`(0~14, 비우면 1). 출력: 그 일정(`schedule_list`의 한 건 모양).
 
 - `remind=false`: 알림 없음. `remindDaysBefore`는 null이 됩니다.
-- `daysBefore=N`: N일 전 저녁 8시에 미리 알리고, 당일 아침에도 알립니다. 0이면 당일 아침만.
-- 묻기 전에 넣은 일정은 `remind=true`, `remindDaysBefore=null`(전날 저녁 + 당일 아침)입니다.
+- `daysBefore=N`: N일 전 아침 8시에 미리 알리고, 당일 아침에도 알립니다. 0이면 당일 아침만. 그날 앱을 열면 인사 뒤에도 "사흘 뒤 … 일정이 있어요"라고 한 번 더 말합니다(2026-11-20 정지원: 미리 알림은 그날 아침 인사로).
+- 묻기 전에 넣은 일정은 `remind=true`, `remindDaysBefore=null`(전날 아침 + 당일 아침)입니다.
 
 알림은 앱이 폰 안에서 예약합니다(원격 푸시는 유료 Apple 계정이 필요해서). 앱은 `GET /api/v1/schedules?date=…&endDate=…`(둘 다 포함, 최대 31일)로 여러 날을 한 번에 받아 이 값대로 예약합니다.
 

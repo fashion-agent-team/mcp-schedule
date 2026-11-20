@@ -7,7 +7,7 @@ import java.time.format.DateTimeFormatter;
  * 도구·REST 출력의 일정 한 건(mcp-tools.md의 schedule_list 모양).
  *
  * @param remind 폰 알림을 받을지
- * @param remindDaysBefore 며칠 전 저녁 8시에 미리 알릴지(0이면 당일 아침만). null이면 아직 안 정함(전날 + 당일)
+ * @param remindDaysBefore 며칠 전 아침 8시에 미리 알릴지(0이면 당일 아침만). null이면 아직 안 정함(전날 + 당일)
  */
 public record EventView(
         String eventId,
