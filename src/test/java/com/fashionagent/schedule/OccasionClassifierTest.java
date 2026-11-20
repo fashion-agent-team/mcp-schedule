@@ -2,15 +2,64 @@ package com.fashionagent.schedule;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import com.fashionagent.schedule.event.Occasion;
 import com.fashionagent.schedule.event.OccasionClassifier;
 import com.fashionagent.schedule.event.OccasionSource;
 
+/**
+ * 일정 분위기(occasion) 정하기 단위 테스트. 앞의 네 개는 앱 레포 specs/002-schedule/spec.md US2 시나리오 그대로,
+ * 나머지는 키워드·카카오 분류를 더 넓게 확인합니다.
+ */
 class OccasionClassifierTest {
 
     private final OccasionClassifier classifier = new OccasionClassifier();
+
+    @Test
+    @DisplayName("US2-1 Given 제목 \"장례식\" When 정하면 Then 장례(mourning), 근거는 제목")
+    void 제목으로_장례를_정한다() {
+        // when
+        OccasionClassifier.Result r = classifier.classify("장례식", null);
+
+        // then
+        assertThat(r.occasion()).isEqualTo(Occasion.mourning);
+        assertThat(r.source()).isEqualTo(OccasionSource.title);
+    }
+
+    @Test
+    @DisplayName("US2-2 Given 제목 \"약속\", 장소 분류 '예식장' When 정하면 Then 결혼식(wedding), 근거는 장소")
+    void 장소로_결혼식을_정한다() {
+        // when
+        OccasionClassifier.Result r = classifier.classify("약속", "가정,생활 > 결혼 > 예식장");
+
+        // then
+        assertThat(r.occasion()).isEqualTo(Occasion.wedding);
+        assertThat(r.source()).isEqualTo(OccasionSource.place);
+    }
+
+    @Test
+    @DisplayName("US2-3 Given 제목 \"회의\", 장소가 등산로 When 정하면 Then 제목을 우선해 업무(business), 근거는 제목")
+    void 제목과_장소가_다르면_제목이_우선() {
+        // when
+        OccasionClassifier.Result r = classifier.classify("회의", "여행 > 관광,명소 > 산 > 등산로");
+
+        // then
+        assertThat(r.occasion()).isEqualTo(Occasion.business);
+        assertThat(r.source()).isEqualTo(OccasionSource.title);
+    }
+
+    @Test
+    @DisplayName("US2-4 Given 제목·장소로 정할 수 없음 When 정하면 Then 평상(casual), 근거는 기본값")
+    void 못_정하면_평상() {
+        // when
+        OccasionClassifier.Result r = classifier.classify("약속", "음식점 > 한식");
+
+        // then
+        assertThat(r.occasion()).isEqualTo(Occasion.casual);
+        assertThat(r.source()).isEqualTo(OccasionSource.fallback);
+    }
 
     @Test
     void 제목_키워드로_정한다() {

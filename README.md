@@ -361,8 +361,8 @@ PR과 `develop`·`main` 푸시마다 GitHub Actions(`.github/workflows/ci.yml`)�
 | 테스트 | 확인하는 것 |
 | --- | --- |
 | `api/ScheduleControllerTest` (슬라이스) | US3-1~3: 조회 응답 모양, 빈 목록, 헤더의 사용자 id로만 조회, X-User-Id 없으면 401, 여러 날 조회, 서비스 오류를 `{error:{code,message}}`로, 브리핑 |
-| `ScheduleIntegrationTest` (통합, PostgreSQL) | 도구 5개, US1-1~3 등록(확인 문장·장소 분위기·제목 없음 거부), US3 내 일정만 시간 순서(도구 = REST), US5 삭제(남의 일정 not_found), 알림 설정·여러 날, 브리핑 도구 = REST, 잘못된 입력 |
-| `OccasionClassifierTest` | 제목 키워드 판단, 제목 우선·장소 보강, `occasion_source` 기록, 한 글자 키워드 처리 |
+| `ScheduleIntegrationTest` (통합, PostgreSQL) | 도구 5개, US1-1~3 등록(확인 문장·장소 분위기·제목 없음 거부), US3 내 일정만 시간 순서(도구 = REST), US5 삭제(남의 일정 not_found), 알림 설정·여러 날, 브리핑 도구 = REST, 잘못된 입력, US4-1~4 아침 8시 알림(한 번만·두 번 돌아도 한 번·8시 뒤 등록은 안 보냄·실패하면 다시), 005 US1-2 스키마 넘는 FK 0개 |
+| `OccasionClassifierTest` | US2-1~4 분위기 정하기(제목·장소·제목 우선·기본값), 제목 키워드 판단, 제목 우선·장소 보강, `occasion_source` 기록, 한 글자 키워드 처리 |
 | `KakaoLocalClientTest` | 카카오 응답에서 장소 종류 읽기, 실패하면 빈 값, 키가 없으면 부르지 않음 |
 | `KoreanTextTest` | "을/를" 붙이기, 읽어 줄 날짜·시각 문장 |
 | `DryCleaningAdviceTest` | 격식 자리만 안내, 남은 날에 맞춘 등록 문장, 3일 전 알림 문장 |
