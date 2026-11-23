@@ -72,6 +72,14 @@ class OccasionClassifierTest {
     }
 
     @Test
+    @DisplayName("Given \"요가 수업\"·\"필라테스 강의\"처럼 운동과 수업이 같이 있음 When 정하면 Then 운동(active), 그냥 \"영어 수업\"은 업무(business)")
+    void 운동_수업은_운동으로() {
+        assertThat(classifier.fromTitle("요가 수업")).isEqualTo(Occasion.active);
+        assertThat(classifier.fromTitle("필라테스 강의")).isEqualTo(Occasion.active);
+        assertThat(classifier.fromTitle("영어 수업")).isEqualTo(Occasion.business);
+    }
+
+    @Test
     void 제목이_우선이고_못_정하면_장소_종류로() {
         assertThat(classifier.classify("친구 결혼식", "여행 > 숙박 > 호텔").occasion()).isEqualTo(Occasion.wedding);
         assertThat(classifier.classify("사촌 형 행사", "가정,생활 > 예식장").occasion()).isEqualTo(Occasion.wedding);

@@ -27,7 +27,8 @@ import com.fashionagent.schedule.event.ScheduleService;
 
 /**
  * ScheduleController 슬라이스 테스트(@WebMvcTest). 일정 서비스(ScheduleService)는 정상 동작한다고 보고 Mock으로 바꿉니다.
- * 컨트롤러가 맡은 일(X-User-Id·쿼리 받기, 응답 모양, 오류를 약속한 모양으로 바꾸기)만 확인합니다.
+ * 로그인 토큰 확인(AccessTokens)도 Mock으로 두고("Bearer t-사용자" → 사용자), 컨트롤러가 맡은 일
+ * (토큰으로 사용자 정하기, 쿼리 받기, 응답 모양, 오류를 약속한 모양으로 바꾸기)만 확인합니다. 토큰 확인은 AccessTokensTest.
  * 일정이 실제로 저장·정렬되는지는 ScheduleIntegrationTest(진짜 PostgreSQL)가 봅니다.
  * 시나리오 번호는 앱 레포 specs/002-schedule/spec.md의 Acceptance Scenarios입니다.
  */
@@ -40,6 +41,23 @@ class ScheduleControllerTest {
     @MockitoBean
     ScheduleService service;
 
+    @MockitoBean
+    AccessTokens tokens;
+
+    @org.junit.jupiter.api.BeforeEach
+    void tokens() {
+        given(tokens.userId(anyString())).willAnswer(inv -> {
+            String auth = inv.getArgument(0);
+            if (!auth.startsWith("Bearer t-")) {
+                throw new com.fashionagent.schedule.common.ScheduleException(
+                        org.springframework.http.HttpStatus.UNAUTHORIZED, "unauthorized", "토큰이 틀렸어요.");
+            }
+            return auth.substring("Bearer t-".length());
+        });
+        given(tokens.userId(org.mockito.ArgumentMatchers.isNull())).willThrow(new com.fashionagent.schedule.common.ScheduleException(
+                org.springframework.http.HttpStatus.UNAUTHORIZED, "unauthorized", "로그인 토큰이 없어요."));
+    }
+
     final String userId = UUID.randomUUID().toString();
 
     static EventView event(String title, String start, String place, String category, Occasion occasion) {
@@ -47,7 +65,7 @@ class ScheduleControllerTest {
     }
 
     ResultActions list(String user, String date) throws Exception {
-        return mvc.perform(get("/api/v1/schedules").header("X-User-Id", user).param("date", date));
+        return mvc.perform(get("/api/v1/schedules").header("Authorization", "Bearer t-" + user).param("date", date));
     }
 
     @Test
@@ -86,8 +104,8 @@ class ScheduleControllerTest {
     }
 
     @Test
-    @DisplayName("US3-3 Given 게이트웨이가 붙인 X-User-Id When 조회하면 Then 그 사용자 id로만 서비스에 묻는다")
-    void 헤더의_사용자_id로만_조회한다() throws Exception {
+    @DisplayName("US3-3 Given 게이트웨이가 그대로 넘긴 로그인 토큰 When 조회하면 Then 토큰의 사용자 id로만 서비스에 묻는다")
+    void 토큰의_사용자_id로만_조회한다() throws Exception {
         // given
         given(service.list(anyString(), any(), any())).willReturn(List.of());
 
@@ -99,7 +117,7 @@ class ScheduleControllerTest {
     }
 
     @Test
-    @DisplayName("US3-3 Given X-User-Id가 없음 When 조회하면 Then 401 unauthorized이고 서비스는 부르지 않는다")
+    @DisplayName("US3-3 Given 로그인 토큰이 없음 When 조회하면 Then 401 unauthorized이고 서비스는 부르지 않는다")
     void 사용자_id가_없으면_401() throws Exception {
         // when
         ResultActions result = mvc.perform(get("/api/v1/schedules").param("date", "2026-11-14"));
@@ -117,7 +135,7 @@ class ScheduleControllerTest {
                 event("회의", "2026-11-03T10:00:00+09:00", null, null, Occasion.business)));
 
         // when
-        ResultActions result = mvc.perform(get("/api/v1/schedules").header("X-User-Id", userId)
+        ResultActions result = mvc.perform(get("/api/v1/schedules").header("Authorization", "Bearer t-" + userId)
                 .param("date", "2026-11-01").param("endDate", "2026-11-20"));
 
         // then
@@ -132,7 +150,7 @@ class ScheduleControllerTest {
                 .willThrow(ScheduleException.badRequest("기간은 31일까지예요."));
 
         // when
-        ResultActions result = mvc.perform(get("/api/v1/schedules").header("X-User-Id", userId)
+        ResultActions result = mvc.perform(get("/api/v1/schedules").header("Authorization", "Bearer t-" + userId)
                 .param("date", "2026-11-01").param("endDate", "2026-12-31"));
 
         // then
@@ -151,7 +169,7 @@ class ScheduleControllerTest {
                 List.of()));
 
         // when
-        ResultActions result = mvc.perform(get("/api/v1/schedules/briefing").header("X-User-Id", userId));
+        ResultActions result = mvc.perform(get("/api/v1/schedules/briefing").header("Authorization", "Bearer t-" + userId));
 
         // then
         result.andExpect(status().isOk())

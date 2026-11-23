@@ -65,7 +65,7 @@ agent는 이 값을 보고 그날 어떤 옷이 맞는지 정합니다. 이 서�
 | `schedule_briefing` | 오늘 일정 + 3일 안 중요한 일정을 읽어 줄 문장으로 | 읽기 전용 |
 | `schedule_set_reminder` | 일정의 폰 알림 받기·며칠 전에 미리 알릴지 | 쓰기, 같은 값이면 같은 결과(`idempotentHint`) |
 
-`userId`는 모든 도구에 들어가며, agent가 Gateway에서 받은 `X-User-Id` 값으로 덮어써서 넣습니다. UUID여야 합니다.
+`userId`는 모든 도구에 들어가며, agent가 로그인 토큰에서 꺼낸 사용자 id로 덮어써서 넣습니다. UUID여야 합니다.
 
 ### `schedule_add`
 
@@ -265,13 +265,13 @@ agent는 이 값을 보고 그날 어떤 옷이 맞는지 정합니다. 이 서�
 앱이 Gateway를 거쳐 직접 보는 날짜별 일정입니다(앱 레포 `openapi.yaml`의 `GET /api/v1/schedules`).
 
 ```bash
-curl -H 'X-User-Id: 11111111-1111-1111-1111-111111111111' \
+curl -H "Authorization: Bearer $TOKEN" \
   'http://localhost:8092/api/v1/schedules?date=2026-11-14'
 ```
 
 - 응답 모양은 `schedule_list`와 같습니다(`{"events": [...]}`).
 - **`GET /api/v1/schedules/briefing`**: 앱을 열고 인사한 뒤 읽어 줄 안내. 응답은 `schedule_briefing`과 같습니다(`spoken`을 그대로 읽으면 됨).
-- `X-User-Id`가 없으면 `401 unauthorized`, 입력이 틀리면 `400 bad_request`.
+- 사용자는 게이트웨이가 그대로 넘긴 로그인 토큰(`Authorization: Bearer`)으로 확인합니다. 게이트웨이와 같은 `JWT_SECRET`이 있어야 하고, 토큰이 없거나 틀리면 `401 unauthorized`, 기한이 지나면 `401 token_expired`, 입력이 틀리면 `400 bad_request`.
 
 ## 실행 방법
 
@@ -353,7 +353,7 @@ npx @modelcontextprotocol/inspector
 
 테스트는 세 종류이고, 이름의 시나리오 번호(예: `US1-3`)는 앱 레포 `specs/002-schedule/spec.md`의 Given/When/Then입니다. 본문도 `// given // when // then`으로 나눴습니다.
 
-- **컨트롤러 슬라이스 테스트**: `@WebMvcTest`로 컨트롤러만 띄우고 `ScheduleService`는 `@MockitoBean`. X-User-Id·쿼리 받기, 응답 모양, 오류 모양만 봅니다.
+- **컨트롤러 슬라이스 테스트**: `@WebMvcTest`로 컨트롤러만 띄우고 `ScheduleService`는 `@MockitoBean`. 로그인 토큰·쿼리 받기, 응답 모양, 오류 모양만 봅니다.
 - **통합 테스트**: 서버 전체 + 진짜 PostgreSQL(Testcontainers `postgres:17`). 카카오와 오늘 날짜만 가짜입니다. Docker가 없으면 `TEST_DB_URL=jdbc:postgresql://localhost:5432/fashion`(`TEST_DB_USER`, `TEST_DB_PASSWORD`)으로 있는 DB에 붙고, 둘 다 없으면 이 테스트만 건너뜁니다.
 - **단위 테스트**: 나머지. 스프링 없이 클래스 하나씩.
 
@@ -361,7 +361,7 @@ PR과 `develop`·`main` 푸시마다 GitHub Actions(`.github/workflows/ci.yml`)�
 
 | 테스트 | 확인하는 것 |
 | --- | --- |
-| `api/ScheduleControllerTest` (슬라이스) | US3-1~3: 조회 응답 모양, 빈 목록, 헤더의 사용자 id로만 조회, X-User-Id 없으면 401, 여러 날 조회, 서비스 오류를 `{error:{code,message}}`로, 브리핑 |
+| `api/ScheduleControllerTest` (슬라이스) | US3-1~3: 조회 응답 모양, 빈 목록, 토큰의 사용자 id로만 조회, 토큰 없으면 401, 여러 날 조회, 서비스 오류를 `{error:{code,message}}`로, 브리핑 |
 | `ScheduleIntegrationTest` (통합, PostgreSQL) | 도구 5개, US1-1~3 등록(확인 문장·장소 분위기·제목 없음 거부), US3 내 일정만 시간 순서(도구 = REST), US5 삭제(남의 일정 not_found), 알림 설정·여러 날, 브리핑 도구 = REST, 잘못된 입력, US4-1~4 아침 8시 알림(한 번만·두 번 돌아도 한 번·8시 뒤 등록은 안 보냄·실패하면 다시), 005 US1-2 스키마 넘는 FK 0개 |
 | `OccasionClassifierTest` | US2-1~4 분위기 정하기(제목·장소·제목 우선·기본값), 제목 키워드 판단, 제목 우선·장소 보강, `occasion_source` 기록, 한 글자 키워드 처리 |
 | `KakaoLocalClientTest` | 카카오 응답에서 장소 종류 읽기, 실패하면 빈 값, 키가 없으면 부르지 않음 |
@@ -400,7 +400,7 @@ src/main/resources/
 
 모든 레포가 지키는 약속은 앱 레포에 있습니다. **코드보다 약속 문서를 먼저 고칩니다.**
 
-- [서비스 간 약속](https://github.com/fashion-agent-team/fashion-agent/blob/develop/docs/contracts/README.md): 공통 규칙, 포트, 인증(`X-User-Id`), 오류 모양, DB 스키마, 옷 추천 흐름
+- [서비스 간 약속](https://github.com/fashion-agent-team/fashion-agent/blob/develop/docs/contracts/README.md): 공통 규칙, 포트, 인증(로그인 토큰), 오류 모양, DB 스키마, 옷 추천 흐름
 - [MCP 도구 입출력](https://github.com/fashion-agent-team/fashion-agent/blob/develop/docs/contracts/mcp-tools.md)
 - [앱 ↔ 게이트웨이 API (OpenAPI)](https://github.com/fashion-agent-team/fashion-agent/blob/develop/docs/contracts/openapi.yaml)
 - [아키텍처와 기술 스택](https://github.com/fashion-agent-team/fashion-agent/blob/develop/docs/ARCHITECTURE.md)
