@@ -1,6 +1,7 @@
 package com.fashionagent.schedule.event;
 
 import java.time.Instant;
+import java.time.LocalTime;
 import java.util.UUID;
 
 import jakarta.persistence.Column;
@@ -8,13 +9,18 @@ import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
-/** schedule 스키마의 events 테이블. 테이블은 Flyway(V1__init.sql)가 만들고, 설계는 프로젝트 DB 문서(db/schema.sql)를 따릅니다. */
+import com.fashionagent.schedule.place.Place;
+
+/** schedule 스키마의 events 테이블. 테이블은 Flyway(V1~V4)가 만들고, 설계는 프로젝트 DB 문서(db/schema.sql)를 따릅니다. */
 @Entity
 @Table(name = "events", indexes = @Index(name = "idx_events_user_start", columnList = "user_id, start_at"))
 public class Event {
@@ -36,13 +42,10 @@ public class Event {
     @Column(length = 200)
     private String place;
 
-    /** 카카오 로컬 검색 결과 id. 못 찾으면 null */
-    @Column(name = "kakao_place_id", length = 20)
-    private String kakaoPlaceId;
-
-    /** 카카오 로컬에서 찾은 장소 분류의 마지막 마디. 예: "예식장" */
-    @Column(name = "place_category", length = 100)
-    private String placeCategory;
+    /** 카카오 로컬에서 찾은 장소(kakao_place_id → places). 못 찾으면 null. 분류는 places에 있습니다(V4, 3NF). */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "kakao_place_id")
+    private Place kakaoPlace;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -65,9 +68,13 @@ public class Event {
     @Column(nullable = false)
     private boolean remind = true;
 
-    /** 며칠 전 저녁 8시에 미리 알릴지(0이면 당일 아침에만). null이면 아직 안 정함: 전날 저녁 + 당일 아침. */
+    /** 며칠 전 아침 8시에 미리 알릴지(0이면 당일 아침에만). null이면 아직 안 정함: 전날 아침 + 당일 아침. */
     @Column(name = "remind_days_before")
     private Integer remindDaysBefore;
+
+    /** 미리 알림을 띄울 시각(서울). null이면 아침 8시. remindDaysBefore가 0이면 당일 알림 시각. */
+    @Column(name = "remind_time")
+    private LocalTime remindTime;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -79,14 +86,13 @@ public class Event {
     }
 
     public Event(String id, UUID userId, String title, Instant startAt, String place,
-            String kakaoPlaceId, String placeCategory, Occasion occasion, OccasionSource occasionSource) {
+            Place kakaoPlace, Occasion occasion, OccasionSource occasionSource) {
         this.id = id;
         this.userId = userId;
         this.title = title;
         this.startAt = startAt;
         this.place = place;
-        this.kakaoPlaceId = kakaoPlaceId;
-        this.placeCategory = placeCategory;
+        this.kakaoPlace = kakaoPlace;
         this.occasion = occasion;
         this.occasionSource = occasionSource;
     }
@@ -110,9 +116,10 @@ public class Event {
         this.careRemindedAt = at;
     }
 
-    public void setReminder(boolean remind, Integer daysBefore) {
+    public void setReminder(boolean remind, Integer daysBefore, LocalTime time) {
         this.remind = remind;
         this.remindDaysBefore = remind ? daysBefore : null;
+        this.remindTime = remind ? time : null;
     }
 
     public String getId() { return id; }
@@ -120,12 +127,14 @@ public class Event {
     public String getTitle() { return title; }
     public Instant getStartAt() { return startAt; }
     public String getPlace() { return place; }
-    public String getKakaoPlaceId() { return kakaoPlaceId; }
-    public String getPlaceCategory() { return placeCategory; }
+    public Place getKakaoPlace() { return kakaoPlace; }
+    public String getKakaoPlaceId() { return kakaoPlace == null ? null : kakaoPlace.getId(); }
+    public String getPlaceCategory() { return kakaoPlace == null ? null : kakaoPlace.getCategory(); }
     public OccasionSource getOccasionSource() { return occasionSource; }
     public Occasion getOccasion() { return occasion; }
     public Instant getNotifiedAt() { return notifiedAt; }
     public Instant getCareRemindedAt() { return careRemindedAt; }
     public boolean isRemind() { return remind; }
     public Integer getRemindDaysBefore() { return remindDaysBefore; }
+    public LocalTime getRemindTime() { return remindTime; }
 }

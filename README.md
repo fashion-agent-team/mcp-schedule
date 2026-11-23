@@ -129,11 +129,12 @@ agent는 이 값을 보고 그날 어떤 옷이 맞는지 정합니다. 이 서�
 
 일정을 넣은 뒤 agent가 "일정 전에 알림을 드릴까요?" → (응) "며칠 전에 미리 알려 드릴까요?"를 묻고 답으로 부릅니다(2026-11-11 진행 님).
 
-입력: `userId`, `eventId`, `remind`(비우면 true), `daysBefore`(0~14, 비우면 1). 출력: 그 일정(`schedule_list`의 한 건 모양).
+입력: `userId`, `eventId`, `remind`(비우면 true), `daysBefore`(0~14, 비우면 1), `time`(24시간 `"16:00"`, 비우면 아침 8시). 출력: 그 일정(`schedule_list`의 한 건 모양, `remindTime` 포함).
 
 - `remind=false`: 알림 없음. `remindDaysBefore`는 null이 됩니다.
-- `daysBefore=N`: N일 전 저녁 8시에 미리 알리고, 당일 아침에도 알립니다. 0이면 당일 아침만.
-- 묻기 전에 넣은 일정은 `remind=true`, `remindDaysBefore=null`(전날 저녁 + 당일 아침)입니다.
+- `daysBefore=N`: N일 전 아침 8시에 미리 알리고, 당일 아침에도 알립니다. 0이면 당일 아침만. 그날 앱을 열면 인사 뒤에도 "사흘 뒤 … 일정이 있어요"라고 한 번 더 말합니다(2026-11-20 정지원: 미리 알림은 그날 아침 인사로).
+- `time`: "2일 전 오후 4시에 알려 줘"면 `daysBefore=2`, `time="16:00"`(2026-11-20 정지원). `daysBefore=0`이면 당일 알림 시각입니다. DB `events.remind_time`(V5), 비면 아침 8시. HH:mm이 아니면 `bad_request`.
+- 묻기 전에 넣은 일정은 `remind=true`, `remindDaysBefore=null`(전날 아침 + 당일 아침)입니다.
 
 알림은 앱이 폰 안에서 예약합니다(원격 푸시는 유료 Apple 계정이 필요해서). 앱은 `GET /api/v1/schedules?date=…&endDate=…`(둘 다 포함, 최대 31일)로 여러 날을 한 번에 받아 이 값대로 예약합니다.
 
@@ -350,12 +351,19 @@ npx @modelcontextprotocol/inspector
 ./gradlew test
 ```
 
-외부 서비스 없이 돕니다(메모리 DB, 카카오는 가짜 서버). PR과 `develop`·`main` 푸시마다 GitHub Actions(`.github/workflows/ci.yml`)가 같은 테스트를 돌립니다.
+테스트는 세 종류이고, 이름의 시나리오 번호(예: `US1-3`)는 앱 레포 `specs/002-schedule/spec.md`의 Given/When/Then입니다. 본문도 `// given // when // then`으로 나눴습니다.
+
+- **컨트롤러 슬라이스 테스트**: `@WebMvcTest`로 컨트롤러만 띄우고 `ScheduleService`는 `@MockitoBean`. X-User-Id·쿼리 받기, 응답 모양, 오류 모양만 봅니다.
+- **통합 테스트**: 서버 전체 + 진짜 PostgreSQL(Testcontainers `postgres:17`). 카카오와 오늘 날짜만 가짜입니다. Docker가 없으면 `TEST_DB_URL=jdbc:postgresql://localhost:5432/fashion`(`TEST_DB_USER`, `TEST_DB_PASSWORD`)으로 있는 DB에 붙고, 둘 다 없으면 이 테스트만 건너뜁니다.
+- **단위 테스트**: 나머지. 스프링 없이 클래스 하나씩.
+
+PR과 `develop`·`main` 푸시마다 GitHub Actions(`.github/workflows/ci.yml`)가 같은 테스트를 돌립니다(러너에 Docker가 있어 통합 테스트도 돕니다).
 
 | 테스트 | 확인하는 것 |
 | --- | --- |
-| `McpToolsIntegrationTest` | MCP 클라이언트로 서버에 붙어 도구 4개가 보이는지, 추가→조회→삭제, 브리핑 도구와 REST가 같은지, 장소 없는 일정·시간대 없는 시각, 잘못된 입력의 오류 모양 |
-| `OccasionClassifierTest` | 제목 키워드 판단, 제목 우선·장소 보강, `occasion_source` 기록, 한 글자 키워드 처리 |
+| `api/ScheduleControllerTest` (슬라이스) | US3-1~3: 조회 응답 모양, 빈 목록, 헤더의 사용자 id로만 조회, X-User-Id 없으면 401, 여러 날 조회, 서비스 오류를 `{error:{code,message}}`로, 브리핑 |
+| `ScheduleIntegrationTest` (통합, PostgreSQL) | 도구 5개, US1-1~3 등록(확인 문장·장소 분위기·제목 없음 거부), US3 내 일정만 시간 순서(도구 = REST), US5 삭제(남의 일정 not_found), 알림 설정·여러 날, 브리핑 도구 = REST, 잘못된 입력, US4-1~4 아침 8시 알림(한 번만·두 번 돌아도 한 번·8시 뒤 등록은 안 보냄·실패하면 다시), 005 US1-2 스키마 넘는 FK 0개 |
+| `OccasionClassifierTest` | US2-1~4 분위기 정하기(제목·장소·제목 우선·기본값), 제목 키워드 판단, 제목 우선·장소 보강, `occasion_source` 기록, 한 글자 키워드 처리 |
 | `KakaoLocalClientTest` | 카카오 응답에서 장소 종류 읽기, 실패하면 빈 값, 키가 없으면 부르지 않음 |
 | `KoreanTextTest` | "을/를" 붙이기, 읽어 줄 날짜·시각 문장 |
 | `DryCleaningAdviceTest` | 격식 자리만 안내, 남은 날에 맞춘 등록 문장, 3일 전 알림 문장 |
