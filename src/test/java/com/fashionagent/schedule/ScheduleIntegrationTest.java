@@ -171,7 +171,7 @@ class ScheduleIntegrationTest {
     private McpSchema.CallToolResult callRaw(String tool, Object args) {
         Map<String, Object> map = json.convertValue(args, new TypeReference<Map<String, Object>>() {
         });
-        return client.callTool(new McpSchema.CallToolRequest(tool, map));
+        return client.callTool(McpSchema.CallToolRequest.builder(tool).arguments(map).build());
     }
 
     private JsonNode call(String tool, Object args) {
