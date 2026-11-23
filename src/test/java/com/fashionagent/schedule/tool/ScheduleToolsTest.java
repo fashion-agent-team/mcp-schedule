@@ -12,9 +12,11 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import com.fashionagent.schedule.common.ScheduleException;
+import com.fashionagent.schedule.event.EventView;
 import com.fashionagent.schedule.event.Occasion;
 import com.fashionagent.schedule.event.ScheduleService;
 import com.fashionagent.schedule.event.ScheduleService.AddResult;
+import com.fashionagent.schedule.event.ScheduleService.Briefing;
 
 import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
 import io.modelcontextprotocol.spec.McpSchema.TextContent;
@@ -110,6 +112,61 @@ class ScheduleToolsTest {
         // then
         assertThat(result.isError()).isFalse();
         assertThat(body(result)).containsEntry("deleted", true);
+    }
+
+    @Test
+    @DisplayName("schedule_briefing Given 오늘 면접 하나 When 부르면 Then spoken과 today 일정을 그대로 돌려준다")
+    void briefingOk() {
+        // given
+        EventView interview = new EventView("e_1", "면접", "2026-11-23T10:00:00+09:00", null, null, Occasion.formal,
+                true, 1, null);
+        given(service.briefing(USER)).willReturn(new Briefing("오늘 오전 10시에 면접이 있어요.", List.of(interview),
+                List.of(), List.of()));
+
+        // when
+        CallToolResult result = tools.scheduleBriefing(USER);
+
+        // then
+        assertThat(result.isError()).isFalse();
+        assertThat(body(result)).containsEntry("spoken", "오늘 오전 10시에 면접이 있어요.")
+                .containsEntry("upcoming", List.of()).containsEntry("reminded", List.of());
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> today = (List<Map<String, Object>>) body(result).get("today");
+        assertThat(today).singleElement().satisfies(e -> assertThat(e).containsEntry("eventId", "e_1")
+                .containsEntry("occasion", "formal"));
+    }
+
+    @Test
+    @DisplayName("schedule_set_reminder Given 2일 전 오후 4시 When 부르면 Then 값을 그대로 넘기고 바뀐 알림 설정을 돌려준다")
+    void setReminderOk() {
+        // given
+        EventView updated = new EventView("e_1", "친구 결혼식", "2026-11-28T12:00:00+09:00", "더채플앳청담", null,
+                Occasion.formal, true, 2, "16:00");
+        given(service.setReminder(USER, "e_1", true, 2, "16:00")).willReturn(updated);
+
+        // when
+        CallToolResult result = tools.scheduleSetReminder(USER, "e_1", true, 2, "16:00");
+
+        // then
+        assertThat(result.isError()).isFalse();
+        assertThat(body(result)).containsEntry("eventId", "e_1").containsEntry("remind", true)
+                .containsEntry("remindDaysBefore", 2).containsEntry("remindTime", "16:00");
+    }
+
+    @Test
+    @DisplayName("schedule_set_reminder Given 선택 값을 비움 When 부르면 Then null 그대로 넘긴다(기본값은 서비스가 정함)")
+    void setReminderDefaultsLeftToService() {
+        // given
+        EventView updated = new EventView("e_1", "면접", "2026-11-24T10:00:00+09:00", null, null, Occasion.formal,
+                true, 1, null);
+        given(service.setReminder(USER, "e_1", null, null, null)).willReturn(updated);
+
+        // when
+        CallToolResult result = tools.scheduleSetReminder(USER, "e_1", null, null, null);
+
+        // then
+        assertThat(result.isError()).isFalse();
+        assertThat(body(result)).containsEntry("remindDaysBefore", 1);
     }
 
     @Test
