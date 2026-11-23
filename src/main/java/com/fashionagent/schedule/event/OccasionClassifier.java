@@ -26,10 +26,11 @@ public class OccasionClassifier {
         TITLE_KEYWORDS.put(Occasion.wedding, List.of("결혼식", "웨딩", "예식"));
         TITLE_KEYWORDS.put(Occasion.formal,
                 List.of("면접", "발표", "상견례", "시상", "졸업식", "입학식", "세미나"));
-        TITLE_KEYWORDS.put(Occasion.business,
-                List.of("회의", "미팅", "출근", "회사", "거래처", "수업", "강의"));
+        // 운동이 수업보다 먼저: "요가 수업", "필라테스 수업", "수영 강의"는 운동복이 맞습니다(2026-11-20 점검).
         TITLE_KEYWORDS.put(Occasion.active, List.of("운동", "헬스", "등산", "산책", "러닝", "조깅",
                 "요가", "필라테스", "축구", "농구"));
+        TITLE_KEYWORDS.put(Occasion.business,
+                List.of("회의", "미팅", "출근", "회사", "거래처", "수업", "강의"));
 
         // 카카오 로컬 category_name 예: "서비스,산업 > 장례식장", "가정,생활 > 예식장",
         // "여행 > 관광,명소 > 산", "스포츠,레저 > 테니스장"
