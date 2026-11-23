@@ -59,6 +59,9 @@ public class ScheduleService {
             String careTip) {
     }
 
+    /** 일정 이름·장소 이름 최대 글자 수(DB varchar 200). */
+    static final int MAX_TEXT = 200;
+
     @Transactional
     public AddResult add(String userId, String title, String start, String place) {
         UUID user = parseUserId(userId);
@@ -67,7 +70,19 @@ public class ScheduleService {
         }
         String cleanTitle = title.strip();
         String cleanPlace = place == null || place.isBlank() ? null : place.strip();
+        // DB 칸 크기(varchar 200)를 넘으면 저장 때 터져 internal_error가 되므로 먼저 막습니다.
+        if (cleanTitle.length() > MAX_TEXT) {
+            throw ScheduleException.badRequest("일정 이름은 " + MAX_TEXT + "자까지예요.");
+        }
+        if (cleanPlace != null && cleanPlace.length() > MAX_TEXT) {
+            throw ScheduleException.badRequest("장소 이름은 " + MAX_TEXT + "자까지예요.");
+        }
         ZonedDateTime startAt = parseStart(start);
+        // 어제 이전 날짜는 받지 않습니다. GPT가 연도를 잘못 넣는 실수(2025년)를 잡고, 지난 일정에 알림이 걸리지 않게.
+        // 오늘 이미 지난 시각("아까 3시 회의")은 기록용으로 받습니다.
+        if (startAt.withZoneSameInstant(zone).toLocalDate().isBefore(today())) {
+            throw ScheduleException.badRequest("이미 지난 날짜예요. 날짜를 다시 확인해 주세요.");
+        }
 
         PlaceInfo info = cleanPlace == null ? null : placeLookup.find(cleanPlace).orElse(null);
         String placeCategory = info == null ? null : info.category();

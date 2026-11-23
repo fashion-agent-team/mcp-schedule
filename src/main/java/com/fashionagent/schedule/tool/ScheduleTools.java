@@ -25,7 +25,7 @@ import tools.jackson.databind.json.JsonMapper;
  * 도구 성격(annotations)과 isError를 직접 정할 수 있기 때문입니다.
  *
  * <p>설명은 Gemini가 읽고 도구를 고르는 근거라 한국어로 언제 쓰는지까지 적습니다.
- * userId는 agent가 X-User-Id 값으로 덮어써서 넣습니다.
+ * userId는 agent가 로그인 토큰에서 확인한 사용자 id로 덮어써서 넣습니다.
  * 결과는 JSON 글(text)과 같은 값의 structuredContent로 돌려주고, 실패하면 {"error": {...}}에 isError=true를 붙입니다.
  */
 @Component

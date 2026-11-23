@@ -43,6 +43,7 @@ import io.modelcontextprotocol.spec.McpSchema;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import com.fashionagent.schedule.api.TestTokens;
 
 /**
  * 통합 테스트: 서버 전체를 띄우고 진짜 PostgreSQL(Flyway로 schedule 스키마)에 붙여,
@@ -53,7 +54,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @EnabledIf("com.fashionagent.schedule.TestDatabase#available")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = { "schedule.reminder.cron=-", "schedule.care-reminder.cron=-" })
+        properties = { "schedule.reminder.cron=-", "schedule.care-reminder.cron=-", TestTokens.PROPERTY })
 class ScheduleIntegrationTest {
 
     @TestConfiguration
@@ -184,7 +185,7 @@ class ScheduleIntegrationTest {
 
     private HttpResponse<String> rest(String pathAndQuery, String user) throws Exception {
         return http.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + pathAndQuery))
-                .header("X-User-Id", user).build(), HttpResponse.BodyHandlers.ofString());
+                .header("Authorization", "Bearer " + TestTokens.token(user, TestTokens.SECRET, java.time.Instant.now().plusSeconds(3600))).build(), HttpResponse.BodyHandlers.ofString());
     }
 
     @Test
@@ -246,6 +247,40 @@ class ScheduleIntegrationTest {
         assertThat(r.isError()).isTrue();
         assertThat(errorCode(r)).isEqualTo("bad_request");
         assertThat(repository.count()).isZero();
+    }
+
+    @Test
+    @DisplayName("Given 200자를 넘는 일정 이름이나 장소 When 등록하면 Then 서버 오류(internal_error) 대신 bad_request이고 저장하지 않는다")
+    void 너무_긴_이름은_bad_request() {
+        // when
+        McpSchema.CallToolResult longTitle = callRaw("schedule_add",
+                new AddArgs(userId, "가".repeat(201), "2026-11-04T10:00:00+09:00", null));
+        McpSchema.CallToolResult longPlace = callRaw("schedule_add",
+                new AddArgs(userId, "면접", "2026-11-04T10:00:00+09:00", "나".repeat(201)));
+        JsonNode exactly200 = call("schedule_add", new AddArgs(userId, "가".repeat(200), "2026-11-04T10:00:00+09:00", null));
+
+        // then
+        assertThat(errorCode(longTitle)).isEqualTo("bad_request");
+        assertThat(errorCode(longPlace)).isEqualTo("bad_request");
+        assertThat(exactly200.path("eventId").asString()).startsWith("e_");
+        assertThat(repository.count()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("Given 오늘이 11월 1일 When 어제(10월 31일)나 작년 날짜로 등록하면 Then bad_request, 오늘 이미 지난 시각은 받는다")
+    void 지난_날짜는_bad_request() {
+        // when
+        McpSchema.CallToolResult yesterday = callRaw("schedule_add",
+                new AddArgs(userId, "회의", "2026-10-31T10:00:00+09:00", null));
+        McpSchema.CallToolResult lastYear = callRaw("schedule_add",
+                new AddArgs(userId, "면접", "2025-11-04T10:00:00+09:00", null));
+        JsonNode earlierToday = call("schedule_add", new AddArgs(userId, "아침 회의", "2026-11-01T07:00:00+09:00", null));
+
+        // then
+        assertThat(errorCode(yesterday)).isEqualTo("bad_request");
+        assertThat(errorCode(lastYear)).isEqualTo("bad_request");
+        assertThat(earlierToday.path("eventId").asString()).startsWith("e_");
+        assertThat(repository.count()).isEqualTo(1);
     }
 
     @Test
