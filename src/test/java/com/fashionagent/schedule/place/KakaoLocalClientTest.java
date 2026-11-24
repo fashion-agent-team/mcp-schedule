@@ -1,4 +1,4 @@
-package com.fashionagent.schedule;
+package com.fashionagent.schedule.place;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -11,8 +11,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.fashionagent.schedule.place.KakaoLocalClient;
-import com.fashionagent.schedule.place.PlaceInfo;
 import com.sun.net.httpserver.HttpServer;
 
 /** 카카오 응답 모양을 흉내 낸 로컬 서버로 파싱과 실패 처리를 확인합니다. */
