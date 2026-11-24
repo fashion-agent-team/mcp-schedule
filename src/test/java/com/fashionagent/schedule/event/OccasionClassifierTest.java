@@ -1,13 +1,10 @@
-package com.fashionagent.schedule;
+package com.fashionagent.schedule.event;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import com.fashionagent.schedule.event.Occasion;
-import com.fashionagent.schedule.event.OccasionClassifier;
-import com.fashionagent.schedule.event.OccasionSource;
 
 /**
  * 일정 분위기(occasion) 정하기 단위 테스트. 앞의 네 개는 앱 레포 specs/002-schedule/spec.md US2 시나리오 그대로,

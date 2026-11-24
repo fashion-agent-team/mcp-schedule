@@ -6,15 +6,15 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 
 /** 테스트에서 "오늘"을 옮기려고 쓰는 시계. */
-class MutableClock extends Clock {
+public class MutableClock extends Clock {
 
     private volatile Instant now;
 
-    MutableClock(Instant now) {
+    public MutableClock(Instant now) {
         this.now = now;
     }
 
-    void set(Instant now) {
+    public void set(Instant now) {
         this.now = now;
     }
 

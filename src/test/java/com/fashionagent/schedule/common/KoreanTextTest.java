@@ -1,4 +1,4 @@
-package com.fashionagent.schedule;
+package com.fashionagent.schedule.common;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -7,7 +7,6 @@ import java.time.ZonedDateTime;
 
 import org.junit.jupiter.api.Test;
 
-import com.fashionagent.schedule.common.KoreanText;
 
 class KoreanTextTest {
 

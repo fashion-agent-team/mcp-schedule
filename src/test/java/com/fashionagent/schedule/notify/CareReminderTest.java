@@ -1,5 +1,6 @@
-package com.fashionagent.schedule;
+package com.fashionagent.schedule.notify;
 
+import com.fashionagent.schedule.MutableClock;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Clock;
@@ -22,8 +23,6 @@ import org.springframework.context.annotation.Primary;
 import com.fashionagent.schedule.event.Event;
 import com.fashionagent.schedule.event.EventRepository;
 import com.fashionagent.schedule.event.ScheduleService;
-import com.fashionagent.schedule.notify.CareReminder;
-import com.fashionagent.schedule.notify.Notifier;
 import com.fashionagent.schedule.place.PlaceLookup;
 
 /** 등록 안내와 3일 전 드라이클리닝 알림을 날짜를 옮겨 가며 확인합니다. */
