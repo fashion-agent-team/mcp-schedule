@@ -1,4 +1,4 @@
-package com.fashionagent.schedule;
+package com.fashionagent.schedule.event;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -7,8 +7,6 @@ import java.time.ZonedDateTime;
 
 import org.junit.jupiter.api.Test;
 
-import com.fashionagent.schedule.event.DryCleaningAdvice;
-import com.fashionagent.schedule.event.Occasion;
 
 class DryCleaningAdviceTest {
 
