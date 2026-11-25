@@ -15,6 +15,9 @@ spring:
     url: ${SPRING_DATASOURCE_URL:jdbc:h2:mem:schedule;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1}
     username: ${SPRING_DATASOURCE_USERNAME:sa}
     password: ${SPRING_DATASOURCE_PASSWORD:}
+    hikari:
+      # DB가 죽었을 때 기본값(30초) 동안 매달리지 않고 3초 만에 실패하게(2026-11-25 게이트웨이 부하 테스트에서 발견).
+      connection-timeout: 3000 # 밀리초
   jpa:
     open-in-view: false
     hibernate:
